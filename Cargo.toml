@@ -1,0 +1,17 @@
+[package]
+name = "diffeq-rs"
+version = "0.1.0"
+authors = ["Matthias Seitz <matthias.seitz@tum.de>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "Differential Equations in rust"
+documentation = "https://docs.rs/diffeq/"
+repository = "https://github.com/mattsse/diffeq-rs"
+keywords = ["math", "algebra", "differential", "equations"]
+categories = ["science"]
+edition = "2018"
+
+[dependencies]
+
+[features]
+problems = []
