@@ -12,6 +12,11 @@ categories = ["science"]
 edition = "2018"
 
 [dependencies]
+ndarray = "0.12"
+nalgebra = "0.18"
+num = "0.2"
+alga = "0.9"
 
 [features]
 problems = []
+plot = []

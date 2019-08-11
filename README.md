@@ -1,10 +1,8 @@
-nom-sparql
+diffeq
 =====================
-[![Build Status](https://travis-ci.com/mattsse/nom-sparql.svg?branch=master)](https://travis-ci.com/mattsse/nom-sparql)
-[![Crates.io](https://img.shields.io/crates/v/nom-sparql.svg)](https://crates.io/crates/nom-sparql)
-[![Documentation](https://docs.rs/nom-spaqrql/badge.svg)](https://docs.rs/nom-sparql)
-
-A WIP rust [SPARQL v1.1](https://en.wikipedia.org/wiki/SPARQL) parser written using [nom](https://github.com/Geal/nom).
+[![Build Status](https://travis-ci.com/mattsse/diffeq-rs.svg?branch=master)](https://travis-ci.com/mattsse/diffeq-rs)
+[![Crates.io](https://img.shields.io/crates/v/diffeq.svg)](https://crates.io/crates/diffeq)
+[![Documentation](https://docs.rs/diffeq/badge.svg)](https://docs.rs/diffeq)
 
 ## License
 
