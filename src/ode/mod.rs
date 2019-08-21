@@ -1,5 +1,6 @@
 pub mod ode2;
 pub mod ops;
+pub mod options;
 pub mod runge_kutta2;
 
 // impl trait for Fn(dy, y, μ, t) and so on

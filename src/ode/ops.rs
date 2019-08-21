@@ -11,5 +11,3 @@ pub trait Norm<Rhs = Self> {
 
     fn norm(self, rhs: Rhs) -> Self::Output;
 }
-
-pub trait Real {}

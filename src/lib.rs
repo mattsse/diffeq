@@ -1,4 +1,6 @@
 #![allow(unused)]
+#[macro_use]
+extern crate derive_builder;
 
 extern crate nalgebra as na;
 

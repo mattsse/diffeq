@@ -16,6 +16,8 @@ ndarray = "0.12"
 nalgebra = "0.18"
 num = "0.2"
 alga = "0.9"
+doc-comment = "0.3"
+derive_builder = "0.7"
 
 [features]
 problems = []

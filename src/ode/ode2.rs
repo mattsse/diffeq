@@ -1,3 +1,5 @@
+use alga::general::RealField;
+
 pub enum Ode {
     Ode23,
     Ode45,
@@ -31,13 +33,38 @@ pub trait OdeSolver {
     type Yout;
 }
 
-pub struct OdeProblem<Rhs, Start, Time> {
+pub struct OdeProblem<Rhs, Start, Time>
+where
+    Rhs: Fn(Start, Time) -> Start,
+    Start: RealField,
+    Time: RealField,
+{
     rhs: Rhs,
     y0: Start,
-    time: Vec<Time>,
+    tspan: Vec<Time>,
 }
 
-pub struct OdeSolution<Tout, Yout> {
+impl<Rhs, Start, Time> OdeProblem<Rhs, Start, Time>
+where
+    Rhs: Fn(Start, Time) -> Start,
+    Start: RealField,
+    Time: RealField,
+{
+}
+
+impl<Rhs, Start, Time> OdeProblem<Rhs, Start, Time>
+where
+    Rhs: Fn(Start, Time) -> Start,
+    Start: RealField,
+    Time: RealField + std::cmp::Ord,
+{
+    #[inline]
+    pub fn sort_tspan(&mut self) {
+        self.tspan.sort()
+    }
+}
+
+pub struct OdeSolution<Tout: RealField, Yout: RealField> {
     tout: Vec<Tout>,
     yout: Vec<Yout>,
 }
@@ -45,9 +72,9 @@ pub struct OdeSolution<Tout, Yout> {
 /// determine the maximal, minimal and initial integration step.
 #[derive(Debug, Default)]
 pub struct Steps {
-    pub maxstep: usize,
-    pub minstep: usize,
-    pub initstep: usize,
+    pub maxstep: Option<usize>,
+    pub minstep: Option<usize>,
+    pub initstep: Option<usize>,
 }
 
 /// defining your ODE in pseudocode
