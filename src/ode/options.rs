@@ -6,7 +6,7 @@ use std::fmt;
 
 // matlab: https://www.mathworks.com/help/matlab/math/summary-of-ode-options.html
 
-pub struct OdeOptionMap(pub HashMap<&'static str, OdeOption>);
+pub type OdeOptionMap = HashMap<&'static str, OdeOption>;
 // for each solver a subset of the `OdeOption`
 // Into / From impls to convert
 
@@ -25,6 +25,7 @@ pub enum Points {
     /// as well as for each intermediate point the solver used
     All,
     /// output is given only for each value in `tspan`.
+    /// where the inner vector contains the indexes of the requested `tspan` values
     Specified(Vec<usize>),
 }
 
@@ -60,7 +61,7 @@ macro_rules! options {
         )*
 
         /// All available Ode options
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq)]
         pub enum OdeOption {
             $(
                 $id(opt_val!($value)),
@@ -112,19 +113,6 @@ macro_rules! option {
     };
 }
 
-#[inline]
-fn fmt_comma_delimited<T: fmt::Display>(f: &mut ::std::fmt::Formatter, parts: &[T]) -> fmt::Result {
-    let mut iter = parts.iter();
-    if let Some(part) = iter.next() {
-        ::std::fmt::Display::fmt(part, f)?;
-    }
-    for part in iter {
-        f.write_str(", ")?;
-        ::std::fmt::Display::fmt(part, f)?;
-    }
-    Ok(())
-}
-
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __ode__deref {
@@ -147,57 +135,65 @@ macro_rules! __ode__deref {
     };
 }
 
+macro_rules! get_opt {
+    ($ops:expr => $s:ident {$($name:ident : $id:ident,)*}) => {
+       $s {
+           $(
+                $name : $ops.0.remove($id::option_name()).map(|op|{
+                    if let crate::ode::options::OdeOption::$name(val) = op {
+                        Some(val.0)
+                    } else {
+                        None
+                    }
+                }),
+           )*
+        }
+    };
+}
+
 macro_rules! impl_ode_ops {
     ( $(#[$a:meta])* @common $id:ident {
-        $($(#[$fa:meta])* @$name:ident $f:ident: $ty:ty),*
+        $($(#[$fa:meta])* $fname:ident: $fty:ident),*
     }) => {
+
         $(#[$a])*
         #[derive(Debug, Clone, Builder)]
         pub struct $id {
             #[builder(setter(strip_option), default)]
-            pub reltol : Option<f64>,
-            pub abstol : Option<f64>,
-            pub minstep : Option<usize>,
-            pub maxstep : Option<usize>,
-            pub initstep : Option<usize>,
+            pub reltol : Option<Reltol>,
+            pub abstol : Option<Abstol>,
+            pub minstep : Option<Minstep>,
+            pub maxstep : Option<Maxstep>,
+            pub initstep : Option<Initstep>,
             $(
                $(#[$fa])*
                #[builder(setter(into))]
-               pub $f : $ty,
+               pub $fname : $fty,
             )*
         }
 
         impl From<crate::ode::options::OdeOptionMap> for $id {
 
             fn from(mut ops: OdeOptionMap) -> Self {
-
-//                Self {
-//                 reltol : ops.0.remove(crate::ode::options::Reltol::option_name()),
-//                 abstol : ops.0.remove(crate::ode::options::Abstol::option_name()),
-//                 minstep : ops.0.remove(crate::ode::options::Minstep::option_name()),
-//                 maxstep : ops.0.remove(crate::ode::options::Maxstep::option_name()),
-//                 initstep : ops.0.remove(crate::ode::options::Initstep::option_name()),
-//                $(
-//                    $f : ops.0.remove($name::option_name()),
-//                )*
-//                }
                 unimplemented!()
+//                get_opt!{
+//                    ops => $id {
+//                        reltol : Reltol,
+//                        abstol : Abstol,
+//                        minstep : Minstep,
+//                        maxstep : Maxstep,
+//                        initstep : Initstep,
+//                         $(
+//                            $f : $name,
+//                         )*
+//                    }
+//                }
             }
         }
 
         impl Into<crate::ode::options::OdeOptionMap> for $id {
 
             fn into(self) -> crate::ode::options::OdeOptionMap {
-//             reltol : ops.0.remove(crate::ode::options::Reltol::option_name())
-//                 .map(crate::ode::options::OdeOption::Reltol),
-//                 abstol : ops.0.remove(crate::ode::options::Abstol::option_name())
-//                  .map(crate::ode::options::OdeOption::Abstol),
-//                 minstep : ops.0.remove(crate::ode::options::Minstep::option_name())
-//                  .map(crate::ode::options::OdeOption::Minstep),
-//                 maxstep : ops.0.remove(crate::ode::options::Maxstep::option_name())
-//                  .map(crate::ode::options::OdeOption::Maxstep),
-//                 initstep : ops.0.remove(crate::ode::options::Initstep::option_name())
-//                  .map(crate::ode::options::OdeOption::Initstep),
                 unimplemented!()
             }
 
@@ -206,21 +202,62 @@ macro_rules! impl_ode_ops {
 }
 
 options! {
-    /// single
+    /// user defined norm for determining the error
+    (Norm, "Norm") => [f64],
+    /// an integration step is accepted if E <= reltol*abs(y)
     (Reltol, "Reltol") => [f64],
+    /// an integration step is accepted if E <= abstol
     (Abstol, "Abstol") => [f64],
+    /// minimal integration step
     (Minstep, "Minstep") => [usize],
+    /// maximal integration step
     (Maxstep, "Maxstep") => [usize],
+    /// initial integration step
     (Initstep, "Initstep") => [usize],
+    /// controls the type of output
     (OutputPoints, "Points") => [Points],
+    /// Sometimes an integration step takes you out of the region where F(t,y) has a valid solution
+    /// and F might result in an error.
+    /// retries sets a limit to the number of times the solver might try with a smaller step.
+    (Retries, "Retries") => [usize]
 
-    /// multi
-    (DummyMult, "Points") => (String)
+}
+
+impl Default for Reltol {
+    fn default() -> Self {
+        Reltol(1e-5)
+    }
+}
+
+impl Default for Abstol {
+    fn default() -> Self {
+        Abstol(1e-8)
+    }
+}
+
+impl Default for Retries {
+    fn default() -> Self {
+        Retries(0)
+    }
 }
 
 impl_ode_ops!(
     /// docs
    @common Demo {
    /// docs
-   @Reltol dummy : Option<f64> }
+   dummy : Reltol }
 );
+
+/// formats a list type separated by commas
+#[inline]
+fn fmt_comma_delimited<T: fmt::Display>(f: &mut ::std::fmt::Formatter, parts: &[T]) -> fmt::Result {
+    let mut iter = parts.iter();
+    if let Some(part) = iter.next() {
+        ::std::fmt::Display::fmt(part, f)?;
+    }
+    for part in iter {
+        f.write_str(", ")?;
+        ::std::fmt::Display::fmt(part, f)?;
+    }
+    Ok(())
+}
