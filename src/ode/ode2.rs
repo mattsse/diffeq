@@ -3,20 +3,58 @@ use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
 use std::iter::FromIterator;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Index, IndexMut, Mul};
 
 // TODO figure out if this is useful as type alias
 //pub type OdeFunction<T: RealField, Y: RealField> = dyn Fn(T, &[Y]) -> Vec<Y>;
 
 // TODO create trait for common params, scalar, Vec, Tuple
 // TODO or struct?
-//pub trait OdeParam<T:RealField> {
-//
-//    /// degree of freedom
-//    fn dof(&self) -> usize;
-//
-//    fn get(&self, usize) -> T;
-//}
+pub trait OdeType<T: RealField>: Clone {
+    /// degree of freedom
+    fn dof(&self) -> usize;
+
+    fn get(&self, index: usize) -> T;
+
+    fn set(&mut self, index: usize, item: T);
+}
+
+impl<T: RealField> OdeType<T> for Vec<T> {
+    fn dof(&self) -> usize {
+        self.len()
+    }
+
+    fn get(&self, index: usize) -> T {
+        self[index]
+    }
+
+    fn set(&mut self, index: usize, item: T) {
+        self[index] = item;
+    }
+}
+
+macro_rules! impl_ode_real {
+    ($($ty:ty),*) => {
+
+    $(
+    impl OdeType<$ty> for $ty {
+        fn dof(&self) -> usize {
+            1
+        }
+
+        fn get(&self, index: usize) -> $ty {
+            *self
+        }
+
+        fn set(&mut self, index: usize, item: $ty) {
+            *self = item;
+        }
+    })*
+
+    };
+}
+
+impl_ode_real!(f64, f32);
 
 #[derive(Debug, Clone)]
 pub enum Ode {
