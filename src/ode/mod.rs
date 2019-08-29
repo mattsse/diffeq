@@ -1,14 +1,12 @@
 pub mod ode2;
 pub mod ops;
 pub mod options;
-pub mod runge_kutta2;
+pub mod runge_kutta;
 
 // impl trait for Fn(dy, y, μ, t) and so on
 use crate::types::*;
 
 use num::Num;
-
-mod runge_kutta;
 
 /// root element for a OdeProblem
 #[derive(Debug, Clone)]

@@ -1,5 +1,5 @@
 use crate::ode::options::OdeOptionMap;
-use crate::ode::runge_kutta2::ButcherTableau;
+use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
 use std::iter::FromIterator;
@@ -174,7 +174,7 @@ where
     Rhs: Fn(f64, &[Y]) -> Vec<Y>,
     Y: RealField + Add<f64, Output = Y> + Mul<f64, Output = Y>,
 {
-    pub fn ode1(&self, ops: &OdeOptionMap)-> OdeSolution<f64, Y> {
+    pub fn ode1(&self, ops: &OdeOptionMap) -> OdeSolution<f64, Y> {
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
@@ -213,7 +213,7 @@ where
                 }
             }
 
-            ys.push( yi);
+            ys.push(yi);
         }
 
         OdeSolution {
@@ -333,7 +333,6 @@ mod tests {
         }
 
         let tspan = itertools_num::linspace(0., tf, 100).collect();
-
 
         let problem = OdeProblem {
             f,
