@@ -10,51 +10,118 @@ use std::ops::{Add, Index, IndexMut, Mul};
 
 // TODO create trait for common params, scalar, Vec, Tuple
 // TODO or struct?
-pub trait OdeType<T: RealField>: Clone {
+pub trait OdeType: Clone {
+    type Item: RealField;
     /// degree of freedom
     fn dof(&self) -> usize;
 
-    fn get(&self, index: usize) -> T;
+    fn get(&self, index: usize) -> Self::Item;
 
-    fn set(&mut self, index: usize, item: T);
+    fn set(&mut self, index: usize, item: Self::Item);
+
+    fn ode_iter(&self) -> OdeTypeIterator<Self> {
+        OdeTypeIterator {
+            index: 0,
+            ode_ty: self,
+        }
+    }
 }
 
-impl<T: RealField> OdeType<T> for Vec<T> {
+pub struct OdeTypeIterator<'a, T: OdeType> {
+    index: usize,
+    ode_ty: &'a T,
+}
+
+impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
+    type Item = T::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.ode_ty.dof() {
+            let next = self.ode_ty.get(self.index);
+            self.index += 1;
+            Some(next)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: RealField> OdeType for Vec<T> {
+    type Item = T;
     fn dof(&self) -> usize {
         self.len()
     }
 
-    fn get(&self, index: usize) -> T {
+    fn get(&self, index: usize) -> Self::Item {
         self[index]
     }
 
-    fn set(&mut self, index: usize, item: T) {
+    fn set(&mut self, index: usize, item: Self::Item) {
         self[index] = item;
     }
 }
 
-macro_rules! impl_ode_real {
-    ($($ty:ty),*) => {
+macro_rules! impl_ode_ty {
+    ($($ty:ident),*) => {
+        $(impl OdeType for $ty {
+            type Item = $ty;
 
-    $(
-    impl OdeType<$ty> for $ty {
-        fn dof(&self) -> usize {
-            1
-        }
+            fn dof(&self) -> usize {
+                1
+            }
 
-        fn get(&self, index: usize) -> $ty {
-            *self
-        }
+            fn get(&self, index: usize) -> Self::Item {
+                *self
+            }
 
-        fn set(&mut self, index: usize, item: $ty) {
-            *self = item;
-        }
-    })*
-
+            fn set(&mut self, index: usize, item: Self::Item) {
+                *self = item;
+            }
+        })*
     };
 }
 
-impl_ode_real!(f64, f32);
+impl_ode_ty!(f64, f32);
+
+macro_rules! impl_ode_tuple {
+    ( [($( $ty:ident),+) => $dof:expr;$item:ident;$($idx:tt),+]) => {
+        impl OdeType for ( $($ty),*) {
+            type Item = $item;
+
+            fn dof(&self) -> usize {
+                $dof
+            }
+
+            fn get(&self, index: usize) -> Self::Item {
+                match index {
+                    $(
+                     _ if index == $idx => self.$idx,
+                    )*
+                    _=> panic!("index out of bounds: the len is {} but the index is {}", $dof, index)
+                }
+            }
+
+            fn set(&mut self, index: usize, item: Self::Item) {
+                match index {
+                    $(
+                     _ if index == $idx => { self.$idx = item },
+                    )*
+                    _=> panic!("index out of bounds: the len is {} but the index is {}", $dof, index)
+                }
+            }
+        }
+    };
+}
+impl_ode_tuple!([(f64, f64) => 2;f64;0,1]);
+impl_ode_tuple!([(f32, f32) => 2;f32;0,1]);
+impl_ode_tuple!([(f64, f64, f64) => 3;f64;0,1,2]);
+impl_ode_tuple!([(f32, f32, f32) => 3;f32;0,1,2]);
+impl_ode_tuple!([(f64, f64, f64, f64) => 4;f64;0,1,2,3]);
+impl_ode_tuple!([(f32, f32, f32, f32) => 4;f32;0,1,2,3]);
+impl_ode_tuple!([(f64, f64, f64, f64, f64) => 5;f64;0,1,2,3,4]);
+impl_ode_tuple!([(f32, f32, f32, f32, f32) => 5;f32;0,1,2,3,4]);
+impl_ode_tuple!([(f64, f64, f64, f64, f64, f64) => 6;f64;0,1,2,3,4,5]);
+impl_ode_tuple!([(f32, f32, f32, f32, f32, f32) => 6;f32;0,1,2,3,4,5]);
 
 #[derive(Debug, Clone)]
 pub enum Ode {
@@ -379,5 +446,18 @@ mod tests {
         };
 
         println!("{:?}", problem.ode1(&OdeOptionMap::default()));
+    }
+
+    #[test]
+    fn ode_tuple() {
+        let mut t3 = (0., 1., 2.);
+        assert_eq!(3, t3.dof());
+
+        assert_eq!(0., t3.get(0));
+
+        t3.set(0, 2.);
+        assert_eq!(2., t3.get(0));
+
+        assert_eq!(vec![2., 1., 2.], t3.ode_iter().collect::<Vec<_>>());
     }
 }
