@@ -4,6 +4,7 @@ use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
+use std::str::FromStr;
 
 // TODO figure out if this is useful as type alias
 //pub type OdeFunction<T: RealField, Y: RealField> = dyn Fn(T, &[Y]) -> Vec<Y>;
@@ -19,6 +20,7 @@ pub trait OdeType: Clone {
 
     fn set(&mut self, index: usize, item: Self::Item);
 
+    #[inline]
     fn ode_iter(&self) -> OdeTypeIterator<Self> {
         OdeTypeIterator {
             index: 0,
@@ -48,14 +50,18 @@ impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
 
 impl<T: RealField> OdeType for Vec<T> {
     type Item = T;
+
+    #[inline]
     fn dof(&self) -> usize {
         self.len()
     }
 
+    #[inline]
     fn get(&self, index: usize) -> Self::Item {
         self[index]
     }
 
+    #[inline]
     fn set(&mut self, index: usize, item: Self::Item) {
         self[index] = item;
     }
@@ -66,14 +72,17 @@ macro_rules! impl_ode_ty {
         $(impl OdeType for $ty {
             type Item = $ty;
 
+            #[inline]
             fn dof(&self) -> usize {
                 1
             }
 
+            #[inline]
             fn get(&self, index: usize) -> Self::Item {
                 *self
             }
 
+            #[inline]
             fn set(&mut self, index: usize, item: Self::Item) {
                 *self = item;
             }
@@ -81,13 +90,12 @@ macro_rules! impl_ode_ty {
     };
 }
 
-impl_ode_ty!(f64, f32);
-
 macro_rules! impl_ode_tuple {
     ( [($( $ty:ident),+) => $dof:expr;$item:ident;$($idx:tt),+]) => {
         impl OdeType for ( $($ty),*) {
             type Item = $item;
 
+            #[inline]
             fn dof(&self) -> usize {
                 $dof
             }
@@ -112,6 +120,7 @@ macro_rules! impl_ode_tuple {
         }
     };
 }
+impl_ode_ty!(f64, f32);
 impl_ode_tuple!([(f64, f64) => 2;f64;0,1]);
 impl_ode_tuple!([(f32, f32) => 2;f32;0,1]);
 impl_ode_tuple!([(f64, f64, f64) => 3;f64;0,1,2]);
@@ -122,16 +131,39 @@ impl_ode_tuple!([(f64, f64, f64, f64, f64) => 5;f64;0,1,2,3,4]);
 impl_ode_tuple!([(f32, f32, f32, f32, f32) => 5;f32;0,1,2,3,4]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64) => 6;f64;0,1,2,3,4,5]);
 impl_ode_tuple!([(f32, f32, f32, f32, f32, f32) => 6;f32;0,1,2,3,4,5]);
+impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64) => 7;f64;0,1,2,3,4,5,6]);
+impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32) => 7;f32;0,1,2,3,4,5,6]);
+impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64) => 8;f64;0,1,2,3,4,5,6,7]);
+impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32) => 8;f32;0,1,2,3,4,5,6,7]);
+impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64, f64) => 9;f64;0,1,2,3,4,5,6,7,8]);
+impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32, f32) => 9;f32;0,1,2,3,4,5,6,7,8]);
 
 #[derive(Debug, Clone)]
 pub enum Ode {
     Ode23,
-    Ode45,
     Ode23s,
-    Ode78,
     Ode4,
+    Ode45,
     Ode4ms,
     Ode4s,
+    Ode78,
+}
+
+impl FromStr for Ode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ode23" => Ok(Ode::Ode23),
+            "ode23s" => Ok(Ode::Ode23s),
+            "ode4" => Ok(Ode::Ode4),
+            "ode45" => Ok(Ode::Ode45),
+            "ode4ms" => Ok(Ode::Ode4ms),
+            "ode4s" => Ok(Ode::Ode4s),
+            "ode78" => Ok(Ode::Ode78),
+            _ => Err(()),
+        }
+    }
 }
 
 pub trait OdeAlgorithm {}
