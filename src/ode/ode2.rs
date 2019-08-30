@@ -6,11 +6,6 @@ use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
-// TODO figure out if this is useful as type alias
-//pub type OdeFunction<T: RealField, Y: RealField> = dyn Fn(T, &[Y]) -> Vec<Y>;
-
-// TODO create trait for common params, scalar, Vec, Tuple
-// TODO or struct?
 pub trait OdeType: Clone {
     type Item: RealField;
     /// degree of freedom
@@ -166,8 +161,6 @@ impl FromStr for Ode {
     }
 }
 
-pub trait OdeAlgorithm {}
-
 // http://docs.juliadiffeq.org/latest/features/performance_overloads.html
 
 /// F: the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t)
@@ -185,110 +178,6 @@ pub trait OdeSolver {
     /// Note that if y0 is a vector, you can get a matlab-like matrix with hcat(yout...).
     type Yout;
 }
-
-#[derive(Default)]
-pub struct KTable<Y: RealField> {
-    pub ks: Vec<Vec<Y>>,
-}
-
-impl<Y: RealField> KTable<Y> {
-    pub fn with_capacity(stages: usize) -> Self {
-        Self {
-            ks: Vec::with_capacity(stages),
-        }
-    }
-}
-
-impl<Y: RealField> FromIterator<Vec<Y>> for KTable<Y> {
-    fn from_iter<T: IntoIterator<Item = Vec<Y>>>(iter: T) -> Self {
-        unimplemented!()
-    }
-}
-
-// TODO iterator that returns a new ktable in each session, need tspan as input
-
-pub struct K<'a, T: RealField, Y, S: Dim, Rhs>
-where
-    Y: RealField + Add<T, Output = Y> + Mul<T, Output = Y>,
-    Rhs: Fn(T, &[Y]) -> Vec<Y>,
-    DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
-{
-    idx: usize,
-    f: &'a Rhs,
-    yn: &'a Vec<Vec<Y>>,
-    btab: &'a ButcherTableau<T, S>,
-    /// the time to approximate
-    tspan: &'a Vec<T>,
-    // also called h
-    //    step_size: T,
-}
-
-impl<'a, T: RealField, Y, S: Dim, Rhs> K<'a, T, Y, S, Rhs>
-where
-    Rhs: Fn(T, &[Y]) -> Vec<Y>,
-    Y: RealField + Add<T, Output = Y> + Mul<T, Output = Y>,
-    DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
-{
-    pub fn new(
-        f: &'a Rhs,
-        yn: &'a Vec<Vec<Y>>,
-        tspan: &'a Vec<T>,
-        btab: &'a ButcherTableau<T, S>,
-    ) -> Self {
-        Self {
-            idx: 0,
-            tspan,
-            yn,
-            f,
-            btab,
-        }
-    }
-}
-
-// streaming iterator or redesign
-impl<'a, T: RealField, Y, S: Dim, Rhs> Iterator for K<'a, T, Y, S, Rhs>
-where
-    Rhs: Fn(T, &[Y]) -> Vec<Y>,
-    Y: RealField + Add<T, Output = Y> + Mul<T, Output = Y>,
-    DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
-{
-    type Item = Vec<Vec<Y>>;
-
-    /// ```latex
-    /// k_{s}&=f(t_{n}+c_{s}h,y_{n}+h(a_{s1}k_{1}+a_{s2}k_{2}+\cdots +a_{s,s-1}k_{s-1}))}
-    /// ```
-    /// returns all ks values for each step
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.idx == self.tspan.len() {
-            return None;
-        }
-
-        let ks: Vec<Vec<Y>> = Vec::with_capacity(self.btab.nstages());
-
-        //        let dof = self.yn.len();
-
-        if self.idx == 0 {
-            //            self.ks[0] = (self.f)(self.t, self.yn);
-            //            return Some(self.ks[0].iter().collect());
-        }
-
-        for s in 0..self.btab.nstages() - 1 {
-            //            let ks = &self.ks[s];
-
-            //            for d in 0..dof {}
-            // a_s,1 .. a_s,s-1
-        }
-
-        self.idx += 1;
-        None
-    }
-}
-
-// TODO enforce same dimensions Vec<Y> D: Dim? or leave it to the caller to construct the f properly
-// or abandon Vec entirely and rely on the caller that the type impls the necessary types
 
 pub struct OdeProblem<Rhs, Y>
 where
