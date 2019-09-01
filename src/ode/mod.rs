@@ -1,51 +1,34 @@
-pub mod ode2;
-pub mod ops;
+use std::str::FromStr;
+
 pub mod options;
+pub mod problem;
 pub mod runge_kutta;
+pub mod types;
 
-// impl trait for Fn(dy, y, μ, t) and so on
-use crate::types::*;
-
-use num::Num;
-
-/// root element for a OdeProblem
 #[derive(Debug, Clone)]
-pub struct OdeProblem<F, Data, Time>
-where
-    F: Fn(usize) -> usize,
-{
-    fun: F,
-    time: Vec<Time>,
-    data: Vec<Data>,
+pub enum Ode {
+    Ode23,
+    Ode23s,
+    Ode4,
+    Ode45,
+    Ode4ms,
+    Ode4s,
+    Ode78,
 }
 
-#[derive(Debug)]
-pub struct ODE23 {}
-#[derive(Debug)]
-pub struct ODE23s {}
+impl FromStr for Ode {
+    type Err = ();
 
-#[derive(Debug)]
-pub struct ODE78 {}
-
-#[derive(Debug)]
-pub struct ODE4<T: Num, Data: DiffEquationSystem<T>> {
-    pub tspan: Vec<T>,
-    pub x0: Data,
-    pub order: Order,
-}
-
-impl<T, Data> Solver<T, Data> for ODE4<T, Data>
-where
-    T: Num,
-    Data: DiffEquationSystem<T>,
-{
-    fn solve<F>(&self, _f: F) -> Result<SolveSolution<T, Data>>
-    where
-        F: Fn(T, Data) -> Data,
-    {
-        unimplemented!()
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ode23" => Ok(Ode::Ode23),
+            "ode23s" => Ok(Ode::Ode23s),
+            "ode4" => Ok(Ode::Ode4),
+            "ode45" => Ok(Ode::Ode45),
+            "ode4ms" => Ok(Ode::Ode4ms),
+            "ode4s" => Ok(Ode::Ode4s),
+            "ode78" => Ok(Ode::Ode78),
+            _ => Err(()),
+        }
     }
 }
-
-/// ODE ROSENBROCK Solve stiff differential equations, Rosenbrock method
-fn ode_rosenbrock() {}

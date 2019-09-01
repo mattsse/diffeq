@@ -1,6 +1,5 @@
 #![allow(clippy::just_underscores_and_digits)]
 
-use crate::ode::ode2::OdeProblem;
 use alga::linear::FiniteDimInnerSpace;
 use na::allocator::Allocator;
 use na::*;
