@@ -8,7 +8,8 @@ use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
 pub trait OdeType: Clone {
-    type Item: RealField;
+    type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item>;
+
     /// degree of freedom
     fn dof(&self) -> usize;
 
@@ -46,7 +47,7 @@ impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
     }
 }
 
-impl<T: RealField> OdeType for Vec<T> {
+impl<T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>> OdeType for Vec<T> {
     type Item = T;
 
     #[inline]
@@ -137,23 +138,25 @@ macro_rules! impl_ode_tuple {
         }
     };
 }
-impl_ode_ty!(f64, f32);
+
+impl_ode_ty!(f64);
+//impl_ode_ty!(f64, f32);
 impl_ode_tuple!([(f64, f64) => 2;f64;0,1]);
-impl_ode_tuple!([(f32, f32) => 2;f32;0,1]);
+//impl_ode_tuple!([(f32, f32) => 2;f32;0,1]);
 impl_ode_tuple!([(f64, f64, f64) => 3;f64;0,1,2]);
-impl_ode_tuple!([(f32, f32, f32) => 3;f32;0,1,2]);
+//impl_ode_tuple!([(f32, f32, f32) => 3;f32;0,1,2]);
 impl_ode_tuple!([(f64, f64, f64, f64) => 4;f64;0,1,2,3]);
-impl_ode_tuple!([(f32, f32, f32, f32) => 4;f32;0,1,2,3]);
+//impl_ode_tuple!([(f32, f32, f32, f32) => 4;f32;0,1,2,3]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64) => 5;f64;0,1,2,3,4]);
-impl_ode_tuple!([(f32, f32, f32, f32, f32) => 5;f32;0,1,2,3,4]);
+//impl_ode_tuple!([(f32, f32, f32, f32, f32) => 5;f32;0,1,2,3,4]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64) => 6;f64;0,1,2,3,4,5]);
-impl_ode_tuple!([(f32, f32, f32, f32, f32, f32) => 6;f32;0,1,2,3,4,5]);
+//impl_ode_tuple!([(f32, f32, f32, f32, f32, f32) => 6;f32;0,1,2,3,4,5]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64) => 7;f64;0,1,2,3,4,5,6]);
-impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32) => 7;f32;0,1,2,3,4,5,6]);
+//impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32) => 7;f32;0,1,2,3,4,5,6]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64) => 8;f64;0,1,2,3,4,5,6,7]);
-impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32) => 8;f32;0,1,2,3,4,5,6,7]);
+//impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32) => 8;f32;0,1,2,3,4,5,6,7]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64, f64) => 9;f64;0,1,2,3,4,5,6,7,8]);
-impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32, f32) => 9;f32;0,1,2,3,4,5,6,7,8]);
+//impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32, f32) => 9;f32;0,1,2,3,4,5,6,7,8]);
 
 #[derive(Debug, Clone)]
 pub enum Ode {
@@ -203,32 +206,36 @@ pub trait OdeSolver {
 
 pub struct OdeProblem<Rhs, Y>
 where
-    Rhs: Fn(f64, &[Y]) -> Vec<Y>,
-    Y: RealField + Add<f64, Output = Y> + Mul<f64, Output = Y>,
+    Rhs: Fn(f64, &Y) -> Y,
+    Y: OdeType,
 {
     /// the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t) and returns the derivatives of y
     f: Rhs,
     /// initial value for `Rhs` input
     /// determines the element type of the `yout` vector of the solutions
-    y0: Vec<Y>,
+    y0: Y,
     /// sorted t values at which the solution (y) is requested
     tspan: Vec<f64>,
 }
 
 // TODO OdeOptions as field or solve parameter
 
-impl<Rhs, Y> OdeProblem<Rhs, Y>
+impl<Rhs, Y, T> OdeProblem<Rhs, Y>
 where
-    Rhs: Fn(f64, &[Y]) -> Vec<Y>,
-    Y: RealField + Add<f64, Output = Y> + Mul<f64, Output = Y>,
+    Rhs: Fn(f64, &Y) -> Y,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
+    Y: OdeType<Item = T>,
 {
     pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
     }
 
     /// solve with adaptive Runge-Kutta methods
-    fn oderk_adapt<S: Dim, T: Into<AdaptiveOptions>>(&self, btab: &ButcherTableau<f64, S>, opts: T)
-    where
+    fn oderk_adapt<S: Dim, Ops: Into<AdaptiveOptions>>(
+        &self,
+        btab: &ButcherTableau<f64, S>,
+        opts: Ops,
+    ) where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, U2, S>
             + Allocator<f64, S, S>
@@ -260,13 +267,13 @@ where
     {
         // TODO apply point filter if set
         // stores the computed values
-        let mut ys: Vec<Vec<Y>> = Vec::with_capacity(self.tspan.len());
+        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
 
         // insert y0 as initial point
         ys.push(self.y0.clone());
 
         // the dimension of the solution type, eg. Vec3
-        let dof = self.y0.len();
+        let dof = self.y0.dof();
 
         for i in 0..self.tspan.len() - 1 {
             let dt = self.tspan[i + 1] - self.tspan[i];
@@ -282,7 +289,7 @@ where
             {
                 // adapt in all dimensions
                 for d in 0..dof {
-                    yi[d] += k[d] * b[s] * dt;
+                    *yi.get_mut(d) += k.get(d) * b[s] * dt;
                 }
             }
 
@@ -296,26 +303,20 @@ where
     }
 
     /// calculates all `k` values for a given value `yn` at a specific time `t`
-    fn calc_ks<S: Dim>(
-        &self,
-        btab: &ButcherTableau<f64, S>,
-        t: f64,
-        yn: &Vec<Y>,
-        dt: f64,
-    ) -> Vec<Vec<Y>>
+    fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, U2, S>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        let mut ks = Vec::with_capacity(btab.nstages());
+        let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
 
         // k1 is just the function call
         ks.push((self.f)(t, yn));
 
         // the dimensions of the solution type
-        let dof = yn.len();
+        let dof = yn.dof();
 
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
@@ -330,7 +331,7 @@ where
                     let a = btab.a[(s, j)];
                     // adapt in all dimensions
                     for d in 0..dof {
-                        yi[d] += k[d] * dt * a;
+                        *yi.get_mut(d) += k.get(d) * dt * a;
                     }
                 }
             }
@@ -354,11 +355,11 @@ where
 //}
 
 #[derive(Debug)]
-pub struct OdeSolution<Tout: RealField, Yout: RealField> {
+pub struct OdeSolution<Tout: RealField, Yout: OdeType> {
     /// Vector of points at which solutions were obtained
     tout: Vec<Tout>,
     /// solutions at times `tout`, stored as a vector `yout`
-    yout: Vec<Vec<Yout>>,
+    yout: Vec<Yout>,
 }
 
 /// defining your ODE in pseudocode
