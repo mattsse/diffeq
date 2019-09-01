@@ -7,8 +7,73 @@ use std::fmt;
 // matlab: https://www.mathworks.com/help/matlab/math/summary-of-ode-options.html
 
 pub type OdeOptionMap = HashMap<&'static str, OdeOption>;
-// for each solver a subset of the `OdeOption`
-// Into / From impls to convert
+
+macro_rules! option_val {
+    ($ops:ident rm $id:ident) => {
+        $ops.remove($id::option_name()).and_then(|op| {
+            if let OdeOption::$id(el) = op {
+                Some(el)
+            } else {
+                None
+            }
+        })
+    };
+
+    ($ops:ident get $id:ident) => {
+        $ops.get($id::option_name()).and_then(|op| {
+            if let OdeOption::$id(el) = op {
+                Some(el.clone())
+            } else {
+                None
+            }
+        })
+    };
+}
+
+#[derive(Clone, Debug, Default, Builder)]
+#[builder(setter(strip_option, into))]
+pub struct AdaptiveOptions {
+    pub minstep: Option<Minstep>,
+    pub maxstep: Option<Maxstep>,
+    pub initstep: Initstep,
+    pub points: Points,
+    pub reltol: Reltol,
+    pub abstol: Abstol,
+}
+
+impl AdaptiveOptions {
+    /// convenience method to create a new builder
+    #[inline]
+    pub fn builder() -> AdaptiveOptionsBuilder {
+        AdaptiveOptionsBuilder::default()
+    }
+}
+
+impl From<OdeOptionMap> for AdaptiveOptions {
+    fn from(mut ops: OdeOptionMap) -> Self {
+        Self {
+            minstep: option_val!(ops rm Minstep),
+            maxstep: option_val!(ops rm Maxstep),
+            initstep: option_val!(ops rm Initstep).unwrap_or_default(),
+            points: option_val!(ops rm Points).unwrap_or_default(),
+            reltol: option_val!(ops rm Reltol).unwrap_or_default(),
+            abstol: option_val!(ops rm Abstol).unwrap_or_default(),
+        }
+    }
+}
+
+impl From<&OdeOptionMap> for AdaptiveOptions {
+    fn from(ops: &OdeOptionMap) -> Self {
+        Self {
+            minstep: option_val!(ops get Minstep),
+            maxstep: option_val!(ops get Maxstep),
+            initstep: option_val!(ops get Initstep).unwrap_or_default(),
+            points: option_val!(ops get Points).unwrap_or_default(),
+            reltol: option_val!(ops get Reltol).unwrap_or_default(),
+            abstol: option_val!(ops get Abstol).unwrap_or_default(),
+        }
+    }
+}
 
 // constants for each option name
 //or struct?
@@ -27,6 +92,13 @@ pub enum Points {
     /// output is given only for each value in `tspan`.
     /// where the inner vector contains the indexes of the requested `tspan` values
     Specified(Vec<usize>),
+}
+
+impl OdeOp for Points {
+    fn option_name() -> &'static str {
+        static NAME: &'static str = "Points";
+        NAME
+    }
 }
 
 impl Default for Points {
@@ -63,8 +135,9 @@ macro_rules! options {
         /// All available Ode options
         #[derive(Debug, Clone, PartialEq)]
         pub enum OdeOption {
+            Points(Points),
             $(
-                $id(opt_val!($value)),
+                $id($id),
             )*
         }
     };
@@ -94,6 +167,13 @@ macro_rules! option {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 ::std::fmt::Display::fmt(&self.0, f)
             }
+        }
+        impl From<$value> for $id {
+
+            fn from(item: $value) -> Self {
+                $id(item)
+            }
+
         }
     };
 
@@ -214,8 +294,6 @@ options! {
     (Maxstep, "Maxstep") => [usize],
     /// initial integration step
     (Initstep, "Initstep") => [usize],
-    /// controls the type of output
-    (OutputPoints, "Points") => [Points],
     /// Sometimes an integration step takes you out of the region where F(t,y) has a valid solution
     /// and F might result in an error.
     /// retries sets a limit to the number of times the solver might try with a smaller step.
@@ -235,18 +313,17 @@ impl Default for Abstol {
     }
 }
 
+impl Default for Initstep {
+    fn default() -> Self {
+        Initstep(0)
+    }
+}
+
 impl Default for Retries {
     fn default() -> Self {
         Retries(0)
     }
 }
-
-impl_ode_ops!(
-    /// docs
-   @common Demo {
-   /// docs
-   dummy : Reltol }
-);
 
 /// formats a list type separated by commas
 #[inline]

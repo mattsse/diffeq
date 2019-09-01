@@ -13,7 +13,7 @@ pub trait OdeType: Clone {
 
     fn get(&self, index: usize) -> Self::Item;
 
-    fn set(&mut self, index: usize, item: Self::Item);
+    fn insert(&mut self, index: usize, item: Self::Item);
 
     #[inline]
     fn ode_iter(&self) -> OdeTypeIterator<Self> {
@@ -57,7 +57,7 @@ impl<T: RealField> OdeType for Vec<T> {
     }
 
     #[inline]
-    fn set(&mut self, index: usize, item: Self::Item) {
+    fn insert(&mut self, index: usize, item: Self::Item) {
         self[index] = item;
     }
 }
@@ -78,7 +78,7 @@ macro_rules! impl_ode_ty {
             }
 
             #[inline]
-            fn set(&mut self, index: usize, item: Self::Item) {
+            fn insert(&mut self, index: usize, item: Self::Item) {
                 *self = item;
             }
         })*
@@ -104,7 +104,7 @@ macro_rules! impl_ode_tuple {
                 }
             }
 
-            fn set(&mut self, index: usize, item: Self::Item) {
+            fn insert(&mut self, index: usize, item: Self::Item) {
                 match index {
                     $(
                      _ if index == $idx => { self.$idx = item },
@@ -168,8 +168,8 @@ impl FromStr for Ode {
 /// y0: initial value for y. The type of y0, promoted as necessary according to the numeric type used
 /// for the times, determines the element type of the yout vector (yout::Vector{typeof(y0*one(t))})
 /// tspan: Any iterable of sorted t values at which the solution (y) is requested.
-/// Most solvers will only consider tspan[1] and tspan[end], and intermediary points will be
-/// interpolated. If tspan[1] > tspan[end] the integration is performed backwards. The times are
+/// Most solvers will only consider tspan\[0\] and tspan\[end\], and intermediary points will be
+/// interpolated. If tspan\[0\] > tspan\[end\] the integration is performed backwards. The times are
 /// promoted as necessary to a common floating-point type.
 pub trait OdeSolver {
     /// Vector of points at which solutions were obtained
@@ -200,6 +200,21 @@ where
     Rhs: Fn(f64, &[Y]) -> Vec<Y>,
     Y: RealField + Add<f64, Output = Y> + Mul<f64, Output = Y>,
 {
+    pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
+        self.oderk_adapt(&ButcherTableau::rk45(), opts)
+    }
+
+    /// solve with adaptive Runge-Kutta methods
+    fn oderk_adapt<S: Dim>(&self, btab: &ButcherTableau<f64, S>, opts: &OdeOptionMap)
+    where
+        DefaultAllocator: Allocator<f64, U1, S>
+            + Allocator<f64, U2, S>
+            + Allocator<f64, S, S>
+            + Allocator<f64, S>,
+    {
+    }
+
+    /// solve the problem using the Feuler Butchertableau
     pub fn ode1(&self, ops: &OdeOptionMap) -> OdeSolution<f64, Y> {
         self.oderk_fixed(&ButcherTableau::feuler())
     }
@@ -373,12 +388,17 @@ mod tests {
     fn ode_tuple() {
         let mut t3 = (0., 1., 2.);
         assert_eq!(3, t3.dof());
-
         assert_eq!(0., t3.get(0));
-
-        t3.set(0, 2.);
+        t3.insert(0, 2.);
         assert_eq!(2., t3.get(0));
-
         assert_eq!(vec![2., 1., 2.], t3.ode_iter().collect::<Vec<_>>());
+
+        let mut t6 = (1., 2., 3., 4., 5., 6.);
+        assert_eq!(6, t6.dof());
+        t6.insert(5, 7.);
+        assert_eq!(
+            vec![1., 2., 3., 4., 5., 7.],
+            t6.ode_iter().collect::<Vec<_>>()
+        );
     }
 }
