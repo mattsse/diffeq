@@ -1,5 +1,5 @@
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
-use crate::ode::runge_kutta::ButcherTableau;
+use crate::ode::runge_kutta::{ButcherTableau, Step};
 use crate::ode::types::{OdeType, OdeTypeIterator};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
@@ -34,7 +34,7 @@ where
 impl<Rhs, Y, T> OdeProblem<Rhs, Y>
 where
     Rhs: Fn(f64, &Y) -> Y,
-    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
     Y: OdeType<Item = T>,
 {
     pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
@@ -126,6 +126,42 @@ where
         }
     }
 
+    /// ```latex
+    /// e_{n+1}=h\sum _{i=1}^{s}(b_{i}-b_{i}^{*})k_{i}
+    /// ```
+    fn calc_error<S: Dim>(&self, ks: &[Y], btab: &ButcherTableau<f64, S>, dt: f64) -> Y
+    where
+        DefaultAllocator: Allocator<f64, U1, S>
+            + Allocator<f64, U2, S>
+            + Allocator<f64, S, S>
+            + Allocator<f64, S>,
+    {
+        assert_eq!(btab.nstages(), ks.len());
+
+        // get copy of the Odetype and ensure default values
+        let mut err = ks[0].clone();
+        err.set_default();
+
+        if let Step::Adaptive(b) = &btab.b {
+            for (s, k) in ks.iter().enumerate() {
+                // adapt in every dimension
+                for d in 0..err.dof() {
+                    // subtract b_1s from b_0s
+                    let weight_err = b[(0, s)] - b[(1, s)];
+                    *err.get_mut(d) += k.get(d) * weight_err;
+                }
+            }
+        }
+
+        // multiply with stepsize
+        for d in 0..err.dof() {
+            let sum = err.get(d);
+            *err.get_mut(d) = sum * dt;
+        }
+
+        err
+    }
+
     /// calculates all `k` values for a given value `yn` at a specific time `t`
     fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
     where
@@ -190,29 +226,29 @@ pub struct OdeSolution<T: RealField, Y: OdeType> {
 mod tests {
     use super::*;
 
-    const dt: f64 = 0.001;
-    const tf: f64 = 100.0;
+    const DT: f64 = 0.001;
+    const TF: f64 = 100.0;
 
     // Initial position in space
-    const y0: [f64; 3] = [0.1, 0.0, 0.0];
+    const Y0: [f64; 3] = [0.1, 0.0, 0.0];
 
-    // Constants sigma, rho and beta
-    const sigma: f64 = 10.0;
-    const rho: f64 = 28.0;
-    const bet: f64 = 8.0 / 3.0;
+    // Constants SIGMA, RHO and beta
+    const SIGMA: f64 = 10.0;
+    const RHO: f64 = 28.0;
+    const BET: f64 = 8.0 / 3.0;
 
     #[test]
     fn lorenz() {
         fn f(t: f64, (x, y, z): &(f64, f64, f64)) -> (f64, f64, f64) {
-            let u = bet * z;
-            let dx_dt = sigma * (y - x);
-            let dy_dt = x * (rho - z) - y;
-            let dz_dt = x * y - bet * z;
+            let u = BET * z;
+            let dx_dt = SIGMA * (y - x);
+            let dy_dt = x * (RHO - z) - y;
+            let dz_dt = x * y - BET * z;
 
             (dx_dt, dy_dt, dz_dt)
         }
 
-        let tspan = itertools_num::linspace(0., tf, 100).collect();
+        let tspan = itertools_num::linspace(0., TF, 100).collect();
 
         let problem = OdeProblem {
             f,

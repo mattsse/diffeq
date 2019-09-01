@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 pub mod options;
 pub mod problem;
 pub mod runge_kutta;
@@ -16,7 +14,7 @@ pub enum Ode {
     Ode78,
 }
 
-impl FromStr for Ode {
+impl std::str::FromStr for Ode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

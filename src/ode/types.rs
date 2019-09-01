@@ -7,8 +7,19 @@ use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
+// add default to item
 pub trait OdeType: Clone {
-    type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item>;
+    type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item> + Default;
+
+    fn default_item() -> Self::Item {
+        Self::Item::default()
+    }
+
+    fn set_default(&mut self) {
+        for i in 0..self.dof() {
+            self.insert(i, Self::default_item());
+        }
+    }
 
     /// degree of freedom
     fn dof(&self) -> usize;
@@ -47,8 +58,9 @@ impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
     }
 }
 
-impl<T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>, D: Dim> OdeType for VectorN<T, D>
+impl<T, D: Dim> OdeType for VectorN<T, D>
 where
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
     DefaultAllocator: Allocator<T, D>,
 {
     type Item = T;
@@ -71,7 +83,10 @@ where
     }
 }
 
-impl<T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>> OdeType for Vec<T> {
+impl<T> OdeType for Vec<T>
+where
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
+{
     type Item = T;
 
     #[inline]
