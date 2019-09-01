@@ -1,7 +1,7 @@
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
-use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
+use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::abs;
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
@@ -44,6 +44,31 @@ impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
         } else {
             None
         }
+    }
+}
+
+// TODO add impls for nalgebra VectorN
+impl<T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>, D: Dim> OdeType for VectorN<T, D>
+where
+    DefaultAllocator: Allocator<T, D>,
+{
+    type Item = T;
+
+    #[inline]
+    fn dof(&self) -> usize {
+        self.nrows()
+    }
+
+    fn get(&self, index: usize) -> Self::Item {
+        self[index]
+    }
+
+    fn get_mut(&mut self, index: usize) -> &mut Self::Item {
+        &mut self[index]
+    }
+
+    fn insert(&mut self, index: usize, item: Self::Item) {
+        self[index] = item;
     }
 }
 
@@ -241,6 +266,9 @@ where
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
+        // store for the computed values
+        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+
         let mut ops = opts.into();
         let minstep = ops.minstep.map_or_else(
             || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 1e18,
@@ -251,6 +279,17 @@ where
             || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 2.5,
             |step| step.0,
         );
+
+        // integration loop
+
+        //        // loop over all stages and k values of the butcher tableau
+        //        for (s, k) in self
+        //            .calc_ks(btab, self.tspan[i], &ys[i], dt)
+        //            .iter()
+        //            .enumerate()
+        //            {
+        //
+        //            }
     }
 
     /// solve the problem using the Feuler Butchertableau
@@ -265,8 +304,7 @@ where
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        // TODO apply point filter if set
-        // stores the computed values
+        // store for the computed values
         let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
 
         // insert y0 as initial point
@@ -355,20 +393,11 @@ where
 //}
 
 #[derive(Debug)]
-pub struct OdeSolution<Tout: RealField, Yout: OdeType> {
+pub struct OdeSolution<T: RealField, Y: OdeType> {
     /// Vector of points at which solutions were obtained
-    tout: Vec<Tout>,
+    tout: Vec<T>,
     /// solutions at times `tout`, stored as a vector `yout`
-    yout: Vec<Yout>,
-}
-
-/// defining your ODE in pseudocode
-macro_rules! ode_def {
-    () => {};
-}
-
-macro_rules! ode_def_bare {
-    () => {};
+    yout: Vec<Y>,
 }
 
 pub trait Solver {
@@ -376,8 +405,6 @@ pub trait Solver {
     type Alg;
     type Args;
 }
-
-pub trait OdeSystem {}
 
 #[cfg(test)]
 mod tests {
@@ -396,21 +423,20 @@ mod tests {
 
     #[test]
     fn lorenz() {
-        fn f(t: f64, r: &[f64]) -> Vec<f64> {
-            let (x, y, z) = (r[0], r[1], r[2]);
-
+        fn f(t: f64, (x, y, z): &(f64, f64, f64)) -> (f64, f64, f64) {
+            let u = bet * z;
             let dx_dt = sigma * (y - x);
             let dy_dt = x * (rho - z) - y;
             let dz_dt = x * y - bet * z;
 
-            vec![dx_dt, dy_dt, dz_dt]
+            (dx_dt, dy_dt, dz_dt)
         }
 
         let tspan = itertools_num::linspace(0., tf, 100).collect();
 
         let problem = OdeProblem {
             f,
-            y0: y0.to_vec(),
+            y0: (0.1, 0., 0.),
             tspan,
         };
 
