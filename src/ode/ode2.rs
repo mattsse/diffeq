@@ -14,6 +14,8 @@ pub trait OdeType: Clone {
 
     fn get(&self, index: usize) -> Self::Item;
 
+    fn get_mut(&mut self, index: usize) -> &mut Self::Item;
+
     fn insert(&mut self, index: usize, item: Self::Item);
 
     #[inline]
@@ -58,6 +60,11 @@ impl<T: RealField> OdeType for Vec<T> {
     }
 
     #[inline]
+    fn get_mut(&mut self, index: usize) -> &mut Self::Item {
+        &mut self[index]
+    }
+
+    #[inline]
     fn insert(&mut self, index: usize, item: Self::Item) {
         self[index] = item;
     }
@@ -76,6 +83,11 @@ macro_rules! impl_ode_ty {
             #[inline]
             fn get(&self, index: usize) -> Self::Item {
                 *self
+            }
+
+            #[inline]
+            fn get_mut(&mut self, index: usize) -> &mut Self::Item {
+                self
             }
 
             #[inline]
@@ -100,6 +112,15 @@ macro_rules! impl_ode_tuple {
                 match index {
                     $(
                      _ if index == $idx => self.$idx,
+                    )*
+                    _=> panic!("index out of bounds: the len is {} but the index is {}", $dof, index)
+                }
+            }
+
+            fn get_mut(&mut self, index: usize) -> &mut Self::Item {
+                match index {
+                    $(
+                     _ if index == $idx => &mut self.$idx,
                     )*
                     _=> panic!("index out of bounds: the len is {} but the index is {}", $dof, index)
                 }
