@@ -1,7 +1,8 @@
-use crate::ode::options::OdeOptionMap;
+use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
+use num_traits::abs;
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
@@ -205,13 +206,23 @@ where
     }
 
     /// solve with adaptive Runge-Kutta methods
-    fn oderk_adapt<S: Dim>(&self, btab: &ButcherTableau<f64, S>, opts: &OdeOptionMap)
+    fn oderk_adapt<S: Dim, T: Into<AdaptiveOptions>>(&self, btab: &ButcherTableau<f64, S>, opts: T)
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, U2, S>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
+        let mut ops = opts.into();
+        let minstep = ops.minstep.map_or_else(
+            || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 1e18,
+            |step| step.0,
+        );
+
+        let maxstep = ops.maxstep.map_or_else(
+            || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 2.5,
+            |step| step.0,
+        );
     }
 
     /// solve the problem using the Feuler Butchertableau

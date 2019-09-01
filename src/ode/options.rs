@@ -96,7 +96,7 @@ pub enum Points {
 
 impl OdeOp for Points {
     fn option_name() -> &'static str {
-        static NAME: &'static str = "Points";
+        static NAME: &str = "Points";
         NAME
     }
 }
@@ -289,11 +289,11 @@ options! {
     /// an integration step is accepted if E <= abstol
     (Abstol, "Abstol") => [f64],
     /// minimal integration step
-    (Minstep, "Minstep") => [usize],
+    (Minstep, "Minstep") => [f64],
     /// maximal integration step
-    (Maxstep, "Maxstep") => [usize],
+    (Maxstep, "Maxstep") => [f64],
     /// initial integration step
-    (Initstep, "Initstep") => [usize],
+    (Initstep, "Initstep") => [f64],
     /// Sometimes an integration step takes you out of the region where F(t,y) has a valid solution
     /// and F might result in an error.
     /// retries sets a limit to the number of times the solver might try with a smaller step.
@@ -315,7 +315,7 @@ impl Default for Abstol {
 
 impl Default for Initstep {
     fn default() -> Self {
-        Initstep(0)
+        Initstep(0.)
     }
 }
 
