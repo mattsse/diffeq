@@ -3,7 +3,7 @@ use crate::ode::runge_kutta::{ButcherTableau, Step};
 use crate::ode::types::{OdeType, OdeTypeIterator};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
-use num_traits::abs;
+use num_traits::{abs, signum};
 use std::iter::FromIterator;
 use std::ops::{Add, Mul};
 
@@ -28,8 +28,6 @@ where
     /// sorted t values at which the solution (y) is requested
     tspan: Vec<f64>,
 }
-
-// TODO OdeOptions as field or solve parameter
 
 impl<Rhs, Y, T> OdeProblem<Rhs, Y>
 where
@@ -83,6 +81,7 @@ where
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
+    // TODO should this return an error on f64::NAN?
     fn oderk_fixed<S: Dim>(&self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
@@ -199,6 +198,14 @@ where
         }
 
         ks
+    }
+
+    /// estimator for initial step based on book
+    /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
+    /// Returns first step, direction of integration and F evaluated at t0
+    fn hinit(&self, x0: &Y, t0: f64, tend: f64, order: usize, reltol: f64, abstol: f64) {
+        let tdir = signum(tend - t0);
+        assert_ne!(0., tdir);
     }
 }
 //

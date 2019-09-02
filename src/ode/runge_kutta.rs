@@ -80,30 +80,12 @@ where
     }
 }
 
-// TODO refactor
-//impl<'a, T: RealField, S: Dim> IntoIterator for &'a ButcherTableau<T, S>
-//where
-//    DefaultAllocator:
-//        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
-//{
-//    type Item = T;
-//    type IntoIter = super::ode2::K<'a, T, S>;
-//
-//    fn into_iter(self) -> Self::IntoIter {
-//        super::ode2::K {
-//            order: 0,
-//            btab: self
-//        }
-//    }
-//}
-
+/// https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
 impl<T: RealField, S: Dim> ButcherTableau<T, S>
 where
     DefaultAllocator:
         Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
 {
-    // https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
-
     /// the Butcher-Barrier says, that the amount of stages grows faster tha the order.
     /// For `nstages` ≥ 5, more than order 5 is required to solve the system
     #[inline]
@@ -112,6 +94,7 @@ where
     }
 
     /// the number of stages `S`
+    #[inline]
     pub fn nstages(&self) -> usize {
         self.c.nrows()
     }
@@ -129,6 +112,7 @@ where
         true
     }
 
+    #[inline]
     pub fn is_fixed(&self) -> bool {
         match &self.b {
             Step::Fixed(_) => true,
@@ -136,6 +120,7 @@ where
         }
     }
 
+    #[inline]
     pub fn is_adaptive(&self) -> bool {
         !self.is_fixed()
     }
@@ -235,9 +220,9 @@ impl ButcherTableau<f64, U2> {
     }
 
     pub fn rk21() -> Self {
-        let a = Matrix2::new(0., 0., 1., 0.0);
-        let b = Step::Adaptive(Matrix2::new(0.5, 0.5, 1., 0.0));
-        let c = Vector2::new(0., 1.0);
+        let a = Matrix2::new(0., 0., 1., 0.);
+        let b = Step::Adaptive(Matrix2::new(0.5, 0.5, 1., 0.));
+        let c = Vector2::new(0., 1.);
 
         Self {
             symbol: RKSymbol::RK21,
@@ -278,7 +263,7 @@ impl ButcherTableau<f64, U4> {
             4. / 9.,
             0.,
         ));
-        let c = Vector4::new(0., 0.5, 0.75, 1.0);
+        let c = Vector4::new(0., 0.5, 0.75, 1.);
 
         Self {
             symbol: RKSymbol::RK23,
@@ -461,8 +446,7 @@ impl ButcherTableau<f64, U7> {
                 0.025,
             ],
         ));
-        let c =
-            VectorN::from_row_slice_generic(U7, U1, &[0., 0.2, 0.3, 0.75, 8. / 9., 1., 1.]);
+        let c = VectorN::from_row_slice_generic(U7, U1, &[0., 0.2, 0.3, 0.75, 8. / 9., 1., 1.]);
 
         Self {
             symbol: RKSymbol::Dopri5,

@@ -1,11 +1,17 @@
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
-use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
-use num_traits::abs;
+use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN, U1, U2};
+use num_traits::{abs, Float};
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
+
+#[derive(Clone, Debug)]
+pub enum PNorm {
+    P(usize),
+    Inf,
+}
 
 // add default to item
 pub trait OdeType: Clone {
@@ -36,6 +42,20 @@ pub trait OdeType: Clone {
             index: 0,
             ode_ty: self,
         }
+    }
+
+    // TODO look up norm (4.11) of http://www.hds.bme.hu/~fhegedus/00%20-%20Numerics/B1993%20Solving%20Ordinary%20Differential%20Equations%20I%20-%20Nonstiff%20Problems.pdf
+    // page 169 a)
+    fn pnorm(&self, p: PNorm) -> Self::Item {
+        let p = match p {
+            PNorm::Inf => 0,
+            PNorm::P(p) => p as i32,
+        };
+        let n = self
+            .ode_iter()
+            .fold(Self::default_item(), |norm, item| norm + item.abs().powi(p));
+
+        unimplemented!()
     }
 }
 
