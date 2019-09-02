@@ -214,11 +214,17 @@ impl ButcherTableau<f64, U2> {
             c,
         }
     }
-
+    ///
+    /// ```text
+    ///  0.000 | 0.000 0.000
+    ///  1.000 | 1.000 0.000
+    /// -------+------------
+    ///        | 0.500 0.500
+    /// ```
     pub fn heun() -> Self {
-        let a = Matrix2::new(0.0, 0.0, 1.0, 0.0);
+        let a = Matrix2::new(0., 0., 1., 0.);
         let b = Step::Fixed(Vector2::new(0.5, 0.5));
-        let c = Vector2::new(0.0, 0.1);
+        let c = Vector2::new(0., 1.);
 
         Self {
             symbol: RKSymbol::Heun,
@@ -713,10 +719,6 @@ mod tests {
         assert!(ButcherTableau::midpoint().is_consistent_rk());
         assert!(ButcherTableau::heun().is_consistent_rk());
         assert!(ButcherTableau::rk21().is_consistent_rk());
-        assert!(ButcherTableau::rk23().is_consistent_rk());
         assert!(ButcherTableau::rk4().is_consistent_rk());
-        assert!(ButcherTableau::rk45().is_consistent_rk());
-        assert!(ButcherTableau::dopri5().is_consistent_rk());
-        assert!(ButcherTableau::feh78().is_consistent_rk());
     }
 }
