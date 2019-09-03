@@ -2,7 +2,8 @@ use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
 use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN, U1, U2};
-use num_traits::{abs, Float};
+use num_traits::identities::Zero;
+use num_traits::Float;
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
@@ -10,20 +11,27 @@ use std::str::FromStr;
 #[derive(Clone, Debug)]
 pub enum PNorm {
     P(usize),
-    Inf,
+    InfPos,
+    InfNeg,
 }
 
-// add default to item
-pub trait OdeType: Clone {
-    type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item> + Default;
-
-    fn default_item() -> Self::Item {
-        Self::Item::default()
+impl Default for PNorm {
+    fn default() -> Self {
+        PNorm::P(2)
     }
+}
 
-    fn set_default(&mut self) {
+// TODO refactor api to support errors and options
+
+// add default to item
+pub trait OdeType: Clone + std::fmt::Debug {
+    type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item>;
+
+    // TODO rm this fn and Default bound
+
+    fn set_zero(&mut self) {
         for i in 0..self.dof() {
-            self.insert(i, Self::default_item());
+            self.insert(i, Self::Item::zero());
         }
     }
 
@@ -46,16 +54,31 @@ pub trait OdeType: Clone {
 
     // TODO look up norm (4.11) of http://www.hds.bme.hu/~fhegedus/00%20-%20Numerics/B1993%20Solving%20Ordinary%20Differential%20Equations%20I%20-%20Nonstiff%20Problems.pdf
     // page 169 a)
+    /// compute the p-norm of the OdeIterable
     fn pnorm(&self, p: PNorm) -> Self::Item {
-        let p = match p {
-            PNorm::Inf => 0,
-            PNorm::P(p) => p as i32,
-        };
-        let n = self
-            .ode_iter()
-            .fold(Self::default_item(), |norm, item| norm + item.abs().powi(p));
-
-        unimplemented!()
+        // TODO if Inf use fold(max(abs))
+        match p {
+            PNorm::InfPos => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
+                let abs = item.abs();
+                if abs > norm {
+                    abs
+                } else {
+                    norm
+                }
+            }),
+            PNorm::InfNeg => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
+                let abs = item.abs();
+                if abs < norm {
+                    abs
+                } else {
+                    norm
+                }
+            }),
+            // TODO add final pow(1/p)
+            PNorm::P(p) => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
+                norm + item.abs().powi(p as i32)
+            }),
+        }
     }
 }
 
@@ -80,7 +103,7 @@ impl<'a, T: OdeType> Iterator for OdeTypeIterator<'a, T> {
 
 impl<T, D: Dim> OdeType for VectorN<T, D>
 where
-    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
     DefaultAllocator: Allocator<T, D>,
 {
     type Item = T;
@@ -105,7 +128,7 @@ where
 
 impl<T> OdeType for Vec<T>
 where
-    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
 {
     type Item = T;
 
@@ -216,3 +239,11 @@ impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64) => 8;f64;0,1,2,3,4,5,6
 //impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32) => 8;f32;0,1,2,3,4,5,6,7]);
 impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64, f64) => 9;f64;0,1,2,3,4,5,6,7,8]);
 //impl_ode_tuple!([(f32, f32, f32, f32, f32, f32, f32, f32, f32) => 9;f32;0,1,2,3,4,5,6,7,8]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pnorm() {}
+}

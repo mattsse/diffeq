@@ -4,6 +4,7 @@ use crate::ode::types::{OdeType, OdeTypeIterator};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::{abs, signum};
+use std::fmt;
 use std::iter::FromIterator;
 use std::ops::{Add, Mul};
 
@@ -32,7 +33,7 @@ where
 impl<Rhs, Y, T> OdeProblem<Rhs, Y>
 where
     Rhs: Fn(f64, &Y) -> Y,
-    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Default,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
     Y: OdeType<Item = T>,
 {
     pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
@@ -139,7 +140,7 @@ where
 
         // get copy of the Odetype and ensure default values
         let mut err = ks[0].clone();
-        err.set_default();
+        err.set_zero();
 
         if let Step::Adaptive(b) = &btab.b {
             for (s, k) in ks.iter().enumerate() {
@@ -229,12 +230,43 @@ pub struct OdeSolution<T: RealField, Y: OdeType> {
     yout: Vec<Y>,
 }
 
+impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(")?;
+
+        fn slice_print<T: fmt::Debug>(f: &mut fmt::Formatter, items: &[T]) -> fmt::Result {
+            write!(f, "[")?;
+            let mut i = 0;
+            while i < items.len() {
+                if i == items.len() - 1 {
+                    write!(f, "{:?}", items[i])?;
+                } else {
+                    write!(f, "{:?}, ", items[i])?;
+                }
+                if i > 8 && i < items.len() - 10 {
+                    write!(f, "... ")?;
+                    i = items.len() - 11;
+                }
+                i += 1;
+            }
+            write!(f, "]")
+        }
+
+        slice_print(f, &self.tout)?;
+        write!(f, ", Vec{{{}}}", self.yout.len())?;
+        slice_print(f, &self.yout)?;
+
+        write!(f, ")")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const DT: f64 = 0.001;
-    const TF: f64 = 100.0;
+    const DT: f64 = 0.01;
+    const TF: f64 = 10.0;
 
     // Initial position in space
     const Y0: [f64; 3] = [0.1, 0.0, 0.0];
@@ -246,24 +278,25 @@ mod tests {
 
     #[test]
     fn lorenz() {
-        fn f(t: f64, (x, y, z): &(f64, f64, f64)) -> (f64, f64, f64) {
+        fn f(t: f64, v: &Vec<f64>) -> Vec<f64> {
+            let (x, y, z) = (v[0], v[1], v[2]);
             let u = BET * z;
             let dx_dt = SIGMA * (y - x);
             let dy_dt = x * (RHO - z) - y;
             let dz_dt = x * y - BET * z;
 
-            (dx_dt, dy_dt, dz_dt)
+            vec![dx_dt, dy_dt, dz_dt]
         }
 
-        let tspan = itertools_num::linspace(0., TF, 100).collect();
+        let tspan: Vec<_> = itertools_num::linspace(0., TF, (TF / DT) as usize).collect();
 
         let problem = OdeProblem {
             f,
-            y0: (0.1, 0., 0.),
+            y0: vec![0.1, 0., 0.],
             tspan,
         };
 
-        println!("{:?}", problem.ode1(&OdeOptionMap::default()));
+        println!("{}", problem.ode1(&OdeOptionMap::default()));
     }
 
     #[test]
