@@ -1,6 +1,6 @@
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::{ButcherTableau, Step};
-use crate::ode::types::{OdeType, OdeTypeIterator};
+use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::{abs, signum};
@@ -33,7 +33,7 @@ where
 impl<Rhs, Y, T> OdeProblem<Rhs, Y>
 where
     Rhs: Fn(f64, &Y) -> Y,
-    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T>,
+    T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Into<f64>,
     Y: OdeType<Item = T>,
 {
     pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
@@ -174,10 +174,7 @@ where
 
         // k1 is just the function call
         ks.push((self.f)(t, yn));
-
-        // the dimensions of the solution type
-        let dof = yn.dof();
-
+        println!("{:?}", ks[0]);
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
 
@@ -190,11 +187,12 @@ where
                 for j in 0..btab.nstages() - 1 {
                     let a = btab.a[(s, j)];
                     // adapt in all dimensions
-                    for d in 0..dof {
+                    for d in 0..yn.dof() {
                         *yi.get_mut(d) += k.get(d) * dt * a;
                     }
                 }
             }
+            // compute the next k value
             ks.push((self.f)(tn, &yi));
         }
 
@@ -204,23 +202,70 @@ where
     /// estimator for initial step based on book
     /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
     /// Returns first step, direction of integration and F evaluated at t0
-    fn hinit(&self, x0: &Y, t0: f64, tend: f64, order: usize, reltol: f64, abstol: f64) {
+    fn hinit(
+        &self,
+        x0: &Y,
+        t0: f64,
+        tend: f64,
+        order: usize,
+        reltol: f64,
+        abstol: f64,
+    ) -> InitialHint<Y> {
         let tdir = signum(tend - t0);
         assert_ne!(0., tdir);
+
+        let norm = x0.pnorm(PNorm::InfPos);
+        let one = Y::Item::one();
+
+        let tau = (norm * reltol).max(one * abstol);
+
+        let d0 = norm / tau;
+        let f0 = (self.f)(t0, x0);
+
+        let d1 = f0.pnorm(PNorm::InfPos) / tau;
+
+        let h0: f64 = if d0 < one * 1e-5 || d1 < one * 1e-5 {
+            1.0e-6
+        } else {
+            0.001 * (d0 / d1).into()
+        };
+
+        // perform Euler step, in every dimension
+        let mut x1 = x0.clone();
+        for d in 0..x1.dof() {
+            *x1.get_mut(d) += (f0.get(d) * h0 * tdir);
+        }
+        let f1 = (self.f)(t0 + tdir * h0, &x1);
+
+        // estimate second derivative
+        let mut f1_0 = f1.clone();
+        for d in 0..f1_0.dof() {
+            *f1_0.get_mut(d) -= f0.get(d);
+        }
+
+        let d2 = f1_0.pnorm(PNorm::InfPos) / (tau * h0);
+
+        let h1: f64 = if d1.max(d2) < one * 1e15 {
+            1.0e-6.max(1.0e-3 * h0)
+        } else {
+            let pow = (2. + d1.max(d2).log10().into()) / (order as f64 + 1.);
+            10f64.powf(pow)
+        };
+
+        let h = tdir * h1.min(100. * h0).min(tdir * (tend - t0));
+
+        InitialHint { h, tdir, f0 }
     }
 }
-//
-//impl<Rhs, Time, Y> OdeProblem<Rhs, Time, Y>
-//where
-//    Rhs: Fn(Time, &[Y]) -> Vec<Y>,
-//    Y: RealField,
-//    Time: RealField + std::cmp::Ord,
-//{
-//    #[inline]
-//    pub fn sort_tspan(&mut self) {
-//        self.tspan.sort()
-//    }
-//}
+
+struct InitialHint<Y> {
+    /// step size hint
+    h: f64,
+    /// signum(tend - t0)
+    tdir: f64,
+    /// initial evaluation of the problem function
+    f0: Y,
+}
 
 #[derive(Debug)]
 pub struct OdeSolution<T: RealField, Y: OdeType> {
@@ -230,8 +275,7 @@ pub struct OdeSolution<T: RealField, Y: OdeType> {
     yout: Vec<Y>,
 }
 
-impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y>
-{
+impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(")?;
 
@@ -266,7 +310,7 @@ mod tests {
     use super::*;
 
     const DT: f64 = 0.01;
-    const TF: f64 = 10.0;
+    const TF: f64 = 100.0;
 
     // Initial position in space
     const Y0: [f64; 3] = [0.1, 0.0, 0.0];
@@ -280,15 +324,19 @@ mod tests {
     fn lorenz() {
         fn f(t: f64, v: &Vec<f64>) -> Vec<f64> {
             let (x, y, z) = (v[0], v[1], v[2]);
-            let u = BET * z;
+
+            // Lorenz equations
             let dx_dt = SIGMA * (y - x);
             let dy_dt = x * (RHO - z) - y;
             let dz_dt = x * y - BET * z;
 
+            // derivatives as vec
             vec![dx_dt, dy_dt, dz_dt]
         }
 
         let tspan: Vec<_> = itertools_num::linspace(0., TF, (TF / DT) as usize).collect();
+
+        println!("{}", tspan.len());
 
         let problem = OdeProblem {
             f,
