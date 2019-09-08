@@ -293,18 +293,15 @@ where
 
         let norm = x0.pnorm(PNorm::InfPos);
         let one = Y::Item::one();
-
         let tau = (norm * reltol).max(one * abstol);
-
         let d0 = norm / tau;
         let f0 = (self.f)(t0, x0);
-
         let d1 = f0.pnorm(PNorm::InfPos) / tau;
 
         let h0: f64 = if d0 < one * 1e-5 || d1 < one * 1e-5 {
             1.0e-6
         } else {
-            0.001 * (d0 / d1).into()
+            0.01 * (d0 / d1).into()
         };
 
         // perform Euler step, in every dimension
@@ -313,19 +310,17 @@ where
             *x1.get_mut(d) += (f0.get(d) * h0 * tdir);
         }
         let f1 = (self.f)(t0 + tdir * h0, &x1);
-
         // estimate second derivative
         let mut f1_0 = f1.clone();
         for d in 0..f1_0.dof() {
             *f1_0.get_mut(d) -= f0.get(d);
         }
-
         let d2 = f1_0.pnorm(PNorm::InfPos) / (tau * h0);
 
-        let h1: f64 = if d1.max(d2) < one * 1e15 {
+        let h1: f64 = if d1.max(d2) < one * 1e-15 {
             1.0e-6.max(1.0e-3 * h0)
         } else {
-            let pow = (2. + d1.max(d2).log10().into()) / (order as f64 + 1.);
+            let pow = -(2. + d1.max(d2).log10().into()) / (order as f64 + 1.);
             10f64.powf(pow)
         };
 
@@ -412,6 +407,11 @@ mod tests {
     }
 
     #[test]
+    fn lorenz_attractor_test() {
+        let s1 = lorenz_attractor(0., &vec![0.1, 0.0, 0.0]);
+    }
+
+    #[test]
     fn lorenz_test() {
         let tspan: Vec<_> = itertools_num::linspace(0., TF, (TF / DT) as usize).collect();
 
@@ -424,9 +424,16 @@ mod tests {
 
     #[test]
     fn hinit_test() {
-        let problem = OdeProblem::builder().tspan_linspace(
-            0., TF, (TF / DT) as usize
-        ).fun(lorenz_attractor).init(vec![0.1, 0., 0.]).build().unwrap();
+        let problem = OdeProblem::builder()
+            .tspan_linspace(0., TF, (TF / DT) as usize)
+            .fun(lorenz_attractor)
+            .init(vec![0.1, 0., 0.])
+            .build()
+            .unwrap();
+
+        let y0 = vec![0.1, 0., 0.];
+
+        let init = problem.hinit(&y0, 0.0, 100., 4, 1e-5 as f64, 1e-8 as f64);
 
     }
 
