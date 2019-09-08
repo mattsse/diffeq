@@ -188,11 +188,13 @@ where
                 .iter()
                 .enumerate()
             {
+                println!("k {:?}", k);
                 // adapt in all dimensions
                 for d in 0..dof {
                     *yi.get_mut(d) += k.get(d) * b[s] * dt;
                 }
             }
+            println!();
 
             ys.push(yi);
         }
@@ -240,7 +242,7 @@ where
     }
 
     /// calculates all `k` values for a given value `yn` at a specific time `t`
-    fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
+    pub fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, U2, S>
@@ -249,9 +251,14 @@ where
     {
         let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
 
+        //        println!("y: {:?}", yn);
+        //        println!("t: {:?}", t);
+        //        println!("dt: {:?}", dt);
+        //        println!("");
+
         // k1 is just the function call
         ks.push((self.f)(t, yn));
-        println!("{:?}", ks[0]);
+
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
 
@@ -383,7 +390,7 @@ impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y> {
 mod tests {
     use super::*;
 
-    const DT: f64 = 0.01;
+    const DT: f64 = 0.001;
     const TF: f64 = 100.0;
 
     // Initial position in space
@@ -412,14 +419,15 @@ mod tests {
     }
 
     #[test]
-    fn lorenz_test() {
-        let tspan: Vec<_> = itertools_num::linspace(0., TF, (TF / DT) as usize).collect();
+    fn ode1_test() {
+        let problem = OdeProblem::builder()
+            .tspan_linspace(0., TF, (TF / DT) as usize)
+            .fun(lorenz_attractor)
+            .init(vec![0.1, 0., 0.])
+            .build()
+            .unwrap();
 
-        let problem = OdeProblem {
-            f: lorenz_attractor,
-            y0: vec![0.1, 0., 0.],
-            tspan,
-        };
+        problem.ode1(&OdeOptionMap::default());
     }
 
     #[test]
@@ -434,7 +442,6 @@ mod tests {
         let y0 = vec![0.1, 0., 0.];
 
         let init = problem.hinit(&y0, 0.0, 100., 4, 1e-5 as f64, 1e-8 as f64);
-
     }
 
     #[test]
