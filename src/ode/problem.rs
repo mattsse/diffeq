@@ -48,25 +48,25 @@ where
     Y: OdeType,
 {
     /// set the problem function
-    pub fn fun(&mut self, f: F) -> &mut Self {
+    pub fn fun(mut self, f: F) -> Self {
         self.f = Some(f);
         self
     }
 
     /// set the initial starting point
-    pub fn init<T: Into<Y>>(&mut self, y0: T) -> &mut Self {
+    pub fn init<T: Into<Y>>(mut self, y0: T) -> Self {
         self.y0 = Some(y0.into());
         self
     }
 
     /// set the time span for the problem
-    pub fn tspan(&mut self, tspan: Vec<f64>) -> &mut Self {
+    pub fn tspan(mut self, tspan: Vec<f64>) -> Self {
         self.tspan = Some(tspan);
         self
     }
 
     /// creates a new tspan with `n` items from `from` to `to`
-    pub fn tspan_linspace(&mut self, from: f64, to: f64, n: usize) -> &mut Self {
+    pub fn tspan_linspace(mut self, from: f64, to: f64, n: usize) -> Self {
         self.tspan = Some(itertools_num::linspace(from, to, n).collect());
         self
     }
@@ -420,6 +420,14 @@ mod tests {
             y0: vec![0.1, 0., 0.],
             tspan,
         };
+    }
+
+    #[test]
+    fn hinit_test() {
+        let problem = OdeProblem::builder().tspan_linspace(
+            0., TF, (TF / DT) as usize
+        ).fun(lorenz_attractor).init(vec![0.1, 0., 0.]).build().unwrap();
+
     }
 
     #[test]
