@@ -9,6 +9,8 @@ pub mod gaussian;
 pub mod hessian;
 pub mod jacobian;
 
+pub mod error;
+
 pub mod ode;
 
 pub mod bvp;

@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::{ButcherTableau, Step};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
@@ -16,13 +17,13 @@ use std::ops::{Add, Mul};
 /// Most solvers will only consider tspan\[0\] and tspan\[end\], and intermediary points will be
 /// interpolated. If tspan\[0\] > tspan\[end\] the integration is performed backwards. The times are
 /// promoted as necessary to a common floating-point type.
-pub struct OdeProblem<Rhs, Y>
+pub struct OdeProblem<F, Y>
 where
-    Rhs: Fn(f64, &Y) -> Y,
+    F: Fn(f64, &Y) -> Y,
     Y: OdeType,
 {
     /// the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t) and returns the derivatives of y
-    f: Rhs,
+    f: F,
     /// initial value for `Rhs` input
     /// determines the element type of the `yout` vector of the solutions
     y0: Y,
@@ -30,12 +31,88 @@ where
     tspan: Vec<f64>,
 }
 
-impl<Rhs, Y, T> OdeProblem<Rhs, Y>
+#[derive(Debug, Clone)]
+pub struct OdeBuilder<F, Y>
 where
-    Rhs: Fn(f64, &Y) -> Y,
+    F: Fn(f64, &Y) -> Y,
+    Y: OdeType,
+{
+    f: Option<F>,
+    y0: Option<Y>,
+    tspan: Option<Vec<f64>>,
+}
+
+impl<F, Y> OdeBuilder<F, Y>
+where
+    F: Fn(f64, &Y) -> Y,
+    Y: OdeType,
+{
+    /// set the problem function
+    pub fn fun(&mut self, f: F) -> &mut Self {
+        self.f = Some(f);
+        self
+    }
+
+    /// set the initial starting point
+    pub fn init<T: Into<Y>>(&mut self, y0: T) -> &mut Self {
+        self.y0 = Some(y0.into());
+        self
+    }
+
+    /// set the time span for the problem
+    pub fn tspan(&mut self, tspan: Vec<f64>) -> &mut Self {
+        self.tspan = Some(tspan);
+        self
+    }
+
+    /// creates a new tspan with `n` items from `from` to `to`
+    pub fn tspan_linspace(&mut self, from: f64, to: f64, n: usize) -> &mut Self {
+        self.tspan = Some(itertools_num::linspace(from, to, n).collect());
+        self
+    }
+
+    fn build(self) -> Result<OdeProblem<F, Y>> {
+        let f = self
+            .f
+            .ok_or(Error::uninitialized("Required problem must be initialized"))?;
+        let y0 = self.y0.ok_or(Error::uninitialized(
+            "Initial starting point must be initialized",
+        ))?;
+        let tspan = self
+            .tspan
+            .ok_or(Error::uninitialized("Time span must be initialized"))?;
+
+        Ok(OdeProblem { f, y0, tspan })
+    }
+}
+
+impl<F, Y> Default for OdeBuilder<F, Y>
+where
+    F: Fn(f64, &Y) -> Y,
+    Y: OdeType,
+{
+    fn default() -> Self {
+        Self {
+            f: None,
+            y0: None,
+            tspan: None,
+        }
+    }
+}
+
+// TODO fix Into<f64>
+impl<F, Y, T> OdeProblem<F, Y>
+where
+    F: Fn(f64, &Y) -> Y,
     T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Into<f64>,
     Y: OdeType<Item = T>,
 {
+    /// convenience method to create a new builder
+    /// same as `OdeBuilder::default()`
+    pub fn builder() -> OdeBuilder<F, Y> {
+        OdeBuilder::default()
+    }
+
     pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
     }
@@ -202,7 +279,7 @@ where
     /// estimator for initial step based on book
     /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
     /// Returns first step, direction of integration and F evaluated at t0
-    fn hinit(
+    pub fn hinit(
         &self,
         x0: &Y,
         t0: f64,
@@ -258,7 +335,8 @@ where
     }
 }
 
-struct InitialHint<Y> {
+#[derive(Debug)]
+pub struct InitialHint<Y> {
     /// step size hint
     h: f64,
     /// signum(tend - t0)
@@ -267,6 +345,7 @@ struct InitialHint<Y> {
     f0: Y,
 }
 
+// TODO rm `T`, use f64 instead
 #[derive(Debug)]
 pub struct OdeSolution<T: RealField, Y: OdeType> {
     /// Vector of points at which solutions were obtained
@@ -320,31 +399,27 @@ mod tests {
     const RHO: f64 = 28.0;
     const BET: f64 = 8.0 / 3.0;
 
+    fn lorenz_attractor(t: f64, v: &Vec<f64>) -> Vec<f64> {
+        let (x, y, z) = (v[0], v[1], v[2]);
+
+        // Lorenz equations
+        let dx_dt = SIGMA * (y - x);
+        let dy_dt = x * (RHO - z) - y;
+        let dz_dt = x * y - BET * z;
+
+        // derivatives as vec
+        vec![dx_dt, dy_dt, dz_dt]
+    }
+
     #[test]
-    fn lorenz() {
-        fn f(t: f64, v: &Vec<f64>) -> Vec<f64> {
-            let (x, y, z) = (v[0], v[1], v[2]);
-
-            // Lorenz equations
-            let dx_dt = SIGMA * (y - x);
-            let dy_dt = x * (RHO - z) - y;
-            let dz_dt = x * y - BET * z;
-
-            // derivatives as vec
-            vec![dx_dt, dy_dt, dz_dt]
-        }
-
+    fn lorenz_test() {
         let tspan: Vec<_> = itertools_num::linspace(0., TF, (TF / DT) as usize).collect();
 
-        println!("{}", tspan.len());
-
         let problem = OdeProblem {
-            f,
+            f: lorenz_attractor,
             y0: vec![0.1, 0., 0.],
             tspan,
         };
-
-        println!("{}", problem.ode1(&OdeOptionMap::default()));
     }
 
     #[test]
