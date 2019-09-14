@@ -188,14 +188,11 @@ where
                 .iter()
                 .enumerate()
             {
-                println!("k {:?}", k);
                 // adapt in all dimensions
                 for d in 0..dof {
                     *yi.get_mut(d) += k.get(d) * b[s] * dt;
                 }
             }
-            println!();
-
             ys.push(yi);
         }
 
@@ -251,17 +248,11 @@ where
     {
         let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
 
-        //        println!("y: {:?}", yn);
-        //        println!("t: {:?}", t);
-        //        println!("dt: {:?}", dt);
-        //        println!("");
-
         // k1 is just the function call
         ks.push((self.f)(t, yn));
 
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
-
             // need a fresh yn
             let mut yi = yn.clone();
 
@@ -421,7 +412,7 @@ mod tests {
     #[test]
     fn ode1_test() {
         let problem = OdeProblem::builder()
-            .tspan_linspace(0., TF, (TF / DT) as usize)
+            .tspan_linspace(0., TF, 100001)
             .fun(lorenz_attractor)
             .init(vec![0.1, 0., 0.])
             .build()
@@ -433,7 +424,7 @@ mod tests {
     #[test]
     fn hinit_test() {
         let problem = OdeProblem::builder()
-            .tspan_linspace(0., TF, (TF / DT) as usize)
+            .tspan_linspace(0., TF, 100001)
             .fun(lorenz_attractor)
             .init(vec![0.1, 0., 0.])
             .build()
