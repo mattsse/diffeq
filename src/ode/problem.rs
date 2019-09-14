@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
-use crate::ode::runge_kutta::{ButcherTableau, Step};
+use crate::ode::runge_kutta::{ButcherTableau, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
@@ -71,6 +71,8 @@ where
         self
     }
 
+    /// creates a new OdeProblem
+    /// returns an error if any field is None
     fn build(self) -> Result<OdeProblem<F, Y>> {
         let f = self
             .f
@@ -218,7 +220,7 @@ where
         let mut err = ks[0].clone();
         err.set_zero();
 
-        if let Step::Adaptive(b) = &btab.b {
+        if let Weights::Adaptive(b) = &btab.b {
             for (s, k) in ks.iter().enumerate() {
                 // adapt in every dimension
                 for d in 0..err.dof() {
@@ -274,9 +276,80 @@ where
         ks
     }
 
+    /// Does one embedded R-K step updating ytrial, yerr and ks.
+    pub fn embedded_step<S: Dim>(
+        &self,
+        yn: &Y,
+        ks: &[Y],
+        t: f64,
+        dt: f64,
+        btab: &ButcherTableau<f64, S>,
+    ) -> (Y, Y)
+    where
+        DefaultAllocator: Allocator<f64, U1, S>
+            + Allocator<f64, U2, S>
+            + Allocator<f64, S, S>
+            + Allocator<f64, S>,
+    {
+        // trial solution at time t+dt
+        let mut ytrial = yn.clone();
+        ytrial.set_zero();
+
+        // error of trial solution
+        let mut yerr = ytrial.clone();
+
+        if let Weights::Adaptive(b) = &btab.b {
+            for d in 0..yn.dof() {
+                *ytrial.get_mut(d) += ks[0].get(d) * b[(0, 0)];
+                *yerr.get_mut(d) += ks[0].get(d) * b[(1, 0)];
+            }
+
+            for s in 1..btab.nstages() {
+                for d in 0..yn.dof() {
+                    *ytrial.get_mut(d) += ks[s].get(d) * b[(0, s)];
+                    *yerr.get_mut(d) += ks[s].get(d) * b[(1, s)];
+                }
+            }
+            for d in 0..yn.dof() {
+                *ytrial.get_mut(d) = yn.get(d) + ytrial.get(d) * dt;
+                *yerr.get_mut(d) = (ytrial.get(d) - yerr.get(d)) * dt;
+            }
+        }
+        (ytrial, yerr)
+    }
+
+    /// For dense output see Hairer & Wanner p.190 using Hermite
+    ///  interpolation. Updates y in-place.
+    /// f_0 = f(x_0 , y_0) , f_1 = f(x_0 + h, y_1 )
+    pub fn hermite_interp(
+        &self,
+        tquery: f64,
+        t: f64,
+        dt: f64,
+        y0: &Y,
+        y1: &Y,
+        f0: &Y,
+        f1: &Y,
+    ) -> Y {
+        let mut y = y0.clone();
+        let theta = (tquery - t) / dt;
+
+        for i in 0..y0.dof() {
+            *y.get_mut(i) = (y0.get(i) * (1. - theta)
+                + y1.get(i) * theta
+                + (y1.get(i) - y0.get(i))
+                    * theta
+                    * (theta - 1.)
+                    * (f0.get(i) * (theta - 1.) * dt + f1.get(i) * theta * dt + (1. - 2. * theta)))
+        }
+        y
+    }
+
     /// estimator for initial step based on book
     /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
     /// Returns first step, direction of integration and F evaluated at t0
+    // TODO rm pub
+    // TODO t0 and tend can prbly be removed as parameter
     pub fn hinit(
         &self,
         x0: &Y,

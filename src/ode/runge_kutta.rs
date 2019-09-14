@@ -50,13 +50,19 @@ where
     /// coefficients - rk matrix
     pub a: MatrixN<T, S>,
     /// weights
-    pub b: Step<T, S>,
+    pub b: Weights<T, S>,
     /// nodes
     pub c: VectorN<T, S>,
 }
 
 #[derive(Debug, Clone)]
-pub enum Step<N: RealField, S: Dim>
+pub enum WeightType {
+    Fixed,
+    Adaptive,
+}
+
+#[derive(Debug, Clone)]
+pub enum Weights<N: RealField, S: Dim>
 where
     DefaultAllocator: Allocator<N, S> + Allocator<N, U2, S>,
 {
@@ -67,15 +73,15 @@ where
     Adaptive(MatrixMN<N, U2, S>),
 }
 
-impl<N: RealField, S: Dim> Step<N, S>
+impl<N: RealField, S: Dim> Weights<N, S>
 where
     DefaultAllocator: Allocator<N, S> + Allocator<N, U2, S>,
 {
     // TODO refactor, find better solution to separate fixed and daptive, is every btab adaptable?
     pub fn as_slice(&self) -> &[N] {
         match self {
-            Step::Fixed(f) => f.as_slice(),
-            Step::Adaptive(a) => a.as_slice(),
+            Weights::Fixed(f) => f.as_slice(),
+            Weights::Adaptive(a) => a.as_slice(),
         }
     }
 }
@@ -115,7 +121,7 @@ where
     #[inline]
     pub fn is_fixed(&self) -> bool {
         match &self.b {
-            Step::Fixed(_) => true,
+            Weights::Fixed(_) => true,
             _ => false,
         }
     }
@@ -123,6 +129,14 @@ where
     #[inline]
     pub fn is_adaptive(&self) -> bool {
         !self.is_fixed()
+    }
+
+    #[inline]
+    pub fn weight_type(&self) -> WeightType {
+        match &self.b {
+            Weights::Fixed(_) => WeightType::Fixed,
+            Weights::Adaptive(_) => WeightType::Adaptive,
+        }
     }
 }
 
@@ -145,13 +159,13 @@ where
         write!(f, "-------+")?;
         write!(f, "{}", "------".repeat(self.nstages()))?;
         match &self.b {
-            Step::Fixed(fixed) => {
+            Weights::Fixed(fixed) => {
                 write!(f, "\n       |")?;
                 for b in fixed.iter() {
                     write!(f, " {:.3}", b)?;
                 }
             }
-            Step::Adaptive(adapt) => {
+            Weights::Adaptive(adapt) => {
                 for row in 0..adapt.nrows() {
                     write!(f, "\n       |")?;
                     for col in 0..self.nstages() {
@@ -173,7 +187,7 @@ impl ButcherTableau<f64, U1> {
     /// ```
     pub fn feuler() -> Self {
         let a = Matrix1::zero();
-        let b = Step::Fixed(Vector1::one());
+        let b = Weights::Fixed(Vector1::one());
         let c = Vector1::zero();
 
         Self {
@@ -189,7 +203,7 @@ impl ButcherTableau<f64, U2> {
     /// the midpoint method https://en.wikipedia.org/wiki/Midpoint_method
     pub fn midpoint() -> Self {
         let a = Matrix2::new(0., 0., 0.5, 0.0);
-        let b = Step::Fixed(Vector2::new(0., 1.0));
+        let b = Weights::Fixed(Vector2::new(0., 1.0));
         let c = Vector2::new(0., 0.5);
 
         Self {
@@ -208,7 +222,7 @@ impl ButcherTableau<f64, U2> {
     /// ```
     pub fn heun() -> Self {
         let a = Matrix2::new(0., 0., 1., 0.);
-        let b = Step::Fixed(Vector2::new(0.5, 0.5));
+        let b = Weights::Fixed(Vector2::new(0.5, 0.5));
         let c = Vector2::new(0., 1.);
 
         Self {
@@ -221,7 +235,7 @@ impl ButcherTableau<f64, U2> {
 
     pub fn rk21() -> Self {
         let a = Matrix2::new(0., 0., 1., 0.);
-        let b = Step::Adaptive(Matrix2::new(0.5, 0.5, 1., 0.));
+        let b = Weights::Adaptive(Matrix2::new(0.5, 0.5, 1., 0.));
         let c = Vector2::new(0., 1.);
 
         Self {
@@ -253,7 +267,7 @@ impl ButcherTableau<f64, U4> {
             4. / 9.,
             0.,
         );
-        let b = Step::Adaptive(Matrix2x4::new(
+        let b = Weights::Adaptive(Matrix2x4::new(
             7. / 24.,
             0.25,
             1. / 3.,
@@ -287,7 +301,7 @@ impl ButcherTableau<f64, U4> {
     pub fn rk4() -> Self {
         let __ = 0.0;
         let c = Vector4::new(__, 0.5, 0.5, 1.);
-        let b = Step::Fixed(Vector4::new(1. / 6., 1. / 3., 1. / 3., 1. / 6.));
+        let b = Weights::Fixed(Vector4::new(1. / 6., 1. / 3., 1. / 3., 1. / 6.));
         let a = Matrix4::new(
             __, __, __, __, 0.5, __, __, __, __, 0.5, __, __, __, __, 1., __,
         );
@@ -343,7 +357,7 @@ impl ButcherTableau<f64, U6> {
             -0.275,
             0.,
         );
-        let b = Step::Adaptive(Matrix2x6::new(
+        let b = Weights::Adaptive(Matrix2x6::new(
             25. / 216.,
             0.,
             1408. / 2565.,
@@ -426,7 +440,7 @@ impl ButcherTableau<f64, U7> {
                 0.,
             ],
         );
-        let b = Step::Adaptive(MatrixMN::from_row_slice_generic(
+        let b = Weights::Adaptive(MatrixMN::from_row_slice_generic(
             U2,
             U7,
             &[
@@ -634,7 +648,7 @@ impl ButcherTableau<f64, U13> {
                 0.,
             ],
         );
-        let b = Step::Adaptive(MatrixMN::from_row_slice_generic(
+        let b = Weights::Adaptive(MatrixMN::from_row_slice_generic(
             U2,
             U13,
             &[
