@@ -108,6 +108,7 @@ where
     /// A Runge–Kutta method is consistent if:
     /// \sum _{j=1}^{i-1}a_{ij}=c_{i}{\text{ for }}i=2,\ldots ,s.
     /// checks if the diagonal entries of the lower triangle of the coefficents `a` correspond to the values of `c`
+    #[inline]
     pub fn is_consistent_rk(&self) -> bool {
         for (j, i) in (1..self.nstages()).enumerate() {
             if self.a[(i, j)] != self.c[i] {

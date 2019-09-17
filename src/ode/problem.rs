@@ -17,6 +17,7 @@ use std::ops::{Add, Mul};
 /// Most solvers will only consider tspan\[0\] and tspan\[end\], and intermediary points will be
 /// interpolated. If tspan\[0\] > tspan\[end\] the integration is performed backwards. The times are
 /// promoted as necessary to a common floating-point type.
+#[derive(Debug, Clone)]
 pub struct OdeProblem<F, Y>
 where
     F: Fn(f64, &Y) -> Y,
@@ -103,6 +104,7 @@ where
 }
 
 // TODO fix Into<f64>
+// TODO should solving fixed consume in order to avoid cloning the time stamp
 impl<F, Y, T> OdeProblem<F, Y>
 where
     F: Fn(f64, &Y) -> Y,
@@ -157,12 +159,13 @@ where
     }
 
     /// solve the problem using the Feuler Butchertableau
-    pub fn ode1(&self, ops: &OdeOptionMap) -> OdeSolution<f64, Y> {
+    pub fn ode1(self, ops: &OdeOptionMap) -> OdeSolution<f64, Y> {
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
-    // TODO should this return an error on f64::NAN?
-    fn oderk_fixed<S: Dim>(&self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
+    // TODO should this return an error on f64::NAN? how for `Realfield`?
+    // TODO is providing an optionmap beneficial?
+    fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
