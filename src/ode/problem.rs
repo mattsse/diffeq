@@ -1,6 +1,7 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, OdeError, Result};
+use crate::ode::increment::{IncrementMap, IncrementValue};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
-use crate::ode::runge_kutta::{ButcherTableau, Weights};
+use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
@@ -8,6 +9,7 @@ use num_traits::{abs, signum};
 use std::fmt;
 use std::iter::FromIterator;
 use std::ops::{Add, Mul};
+use std::slice::Iter;
 
 /// F: the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t)
 /// and returns dy/dt::typeof(y/t)
@@ -104,7 +106,6 @@ where
 }
 
 // TODO fix Into<f64>
-// TODO should solving fixed consume in order to avoid cloning the time stamp
 impl<F, Y, T> OdeProblem<F, Y>
 where
     F: Fn(f64, &Y) -> Y,
@@ -117,7 +118,7 @@ where
         OdeBuilder::default()
     }
 
-    pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) {
+    pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
     }
 
@@ -126,26 +127,68 @@ where
         &self,
         btab: &ButcherTableau<f64, S>,
         opts: Ops,
-    ) where
+    ) -> Result<OdeSolution<f64, Y>, OdeError>
+    where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
+        if !btab.is_adaptive() {
+            return Err(OdeError::InvalidButcherTableauWeightType {
+                expected: WeightType::Adaptive,
+                got: WeightType::Explicit,
+            });
+        }
+
+        if self.tspan.is_empty() {
+            // nothing to solve
+            return Ok(OdeSolution::default());
+        }
+
         // store for the computed values
         let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
 
+        let tstart = self.tspan[0];
+        let tend = self.tspan[self.tspan.len() - 1];
         let mut ops = opts.into();
-        let minstep = ops.minstep.map_or_else(
-            || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 1e18,
-            |step| step.0,
-        );
+        let minstep = ops
+            .minstep
+            .map_or_else(|| abs(tend - tstart) / 1e18, |step| step.0);
 
-        let maxstep = ops.maxstep.map_or_else(
-            || abs(self.tspan[self.tspan.len() - 1] - self.tspan[0]) / 2.5,
-            |step| step.0,
-        );
+        let maxstep = ops
+            .maxstep
+            .map_or_else(|| abs(tend - tstart) / 2.5, |step| step.0);
 
+        let reltol = ops.reltol.0;
+        let abstol = ops.abstol.0;
+
+        let init = self.hinit(
+            &self.y0,
+            tstart,
+            tend,
+            btab.symbol.order().min(),
+            reltol,
+            abstol,
+        )?;
+
+        let dt = if signum(ops.initstep.0) == init.tdir {
+            ops.initstep.0
+        } else {
+            return Err(OdeError::InvalidInitstep);
+        };
+
+        // integration loop
+        let mut timeout = 0usize;
+        let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
+
+        // k0 is just the function call
+        ks.push(init.f0);
+
+        loop {
+
+            //            let (ytrial, yerr) = self.embedded_step(&y0, )
+        }
         // integration loop
 
         //        // loop over all stages and k values of the butcher tableau
@@ -156,6 +199,8 @@ where
         //            {
         //
         //            }
+
+        unimplemented!()
     }
 
     /// solve the problem using the Feuler Butchertableau
@@ -189,8 +234,8 @@ where
             let b = btab.b.as_slice();
             // loop over all stages and k values of the butcher tableau
             for (s, k) in self
-                .calc_ks(btab, self.tspan[i], &ys[i], dt)
-                .iter()
+                .calc_increments(btab, self.tspan[i], &ys[i], dt)
+                .ks()
                 .enumerate()
             {
                 // adapt in all dimensions
@@ -202,7 +247,7 @@ where
         }
 
         OdeSolution {
-            tout: self.tspan.clone(),
+            tout: self.tspan,
             yout: ys,
         }
     }
@@ -210,6 +255,7 @@ where
     /// ```latex
     /// e_{n+1}=h\sum _{i=1}^{s}(b_{i}-b_{i}^{*})k_{i}
     /// ```
+    // TODO refactor with Incrementmap
     fn calc_error<S: Dim>(&self, ks: &[Y], btab: &ButcherTableau<f64, S>, dt: f64) -> Y
     where
         DefaultAllocator: Allocator<f64, U1, S>
@@ -243,18 +289,24 @@ where
         err
     }
 
-    /// calculates all `k` values for a given value `yn` at a specific time `t`
-    pub fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
+    /// calculates all increment values for a given value `yn` at a specific time `t`
+    pub fn calc_increments<S: Dim>(
+        &self,
+        btab: &ButcherTableau<f64, S>,
+        t: f64,
+        yn: &Y,
+        dt: f64,
+    ) -> IncrementMap<Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
+        let mut increments = IncrementMap::with_capacity(btab.nstages());
 
-        // k1 is just the function call
-        ks.push((self.f)(t, yn));
+        // k0 is just the function call
+        increments.push(IncrementValue::new((self.f)(t, yn), yn.clone()));
 
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
@@ -262,7 +314,7 @@ where
             let mut yi = yn.clone();
 
             // loop over all previous computed ks
-            for k in &ks {
+            for k in increments.ks() {
                 // loop over a coefficients in row s
                 for j in 0..btab.nstages() - 1 {
                     let a = btab.a[(s, j)];
@@ -273,10 +325,9 @@ where
                 }
             }
             // compute the next k value
-            ks.push((self.f)(tn, &yi));
+            increments.push(IncrementValue::new((self.f)(tn, &yi), yi));
         }
-
-        ks
+        increments
     }
 
     /// Does one embedded R-K step updating ytrial, yerr and ks.
@@ -313,6 +364,7 @@ where
                     *yerr.get_mut(d) += ks[s].get(d) * b[(s, 1)];
                 }
             }
+
             for d in 0..yn.dof() {
                 *ytrial.get_mut(d) = yn.get(d) + ytrial.get(d) * dt;
                 *yerr.get_mut(d) = (ytrial.get(d) - yerr.get(d)) * dt;
@@ -400,9 +452,11 @@ where
         order: usize,
         reltol: f64,
         abstol: f64,
-    ) -> InitialHint<Y> {
+    ) -> Result<InitialHint<Y>, OdeError> {
         let tdir = signum(tend - t0);
-        assert_ne!(0., tdir);
+        if tdir == 0. {
+            return Err(OdeError::ZeroTimeSpan);
+        }
 
         let norm = x0.pnorm(PNorm::InfPos);
         let one = Y::Item::one();
@@ -439,7 +493,7 @@ where
 
         let h = tdir * h1.min(100. * h0).min(tdir * (tend - t0));
 
-        InitialHint { h, tdir, f0 }
+        Ok(InitialHint { h, tdir, f0 })
     }
 }
 
@@ -467,6 +521,15 @@ pub struct OdeSolution<T: RealField, Y: OdeType> {
     tout: Vec<T>,
     /// solutions at times `tout`, stored as a vector `yout`
     yout: Vec<Y>,
+}
+
+impl<T: RealField, Y: OdeType> Default for OdeSolution<T, Y> {
+    fn default() -> Self {
+        OdeSolution {
+            tout: Vec::new(),
+            yout: Vec::new(),
+        }
+    }
 }
 
 impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y> {

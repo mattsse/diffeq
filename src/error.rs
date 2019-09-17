@@ -31,4 +31,20 @@ pub enum OdeError {
         expected: WeightType,
         got: WeightType,
     },
+    #[snafu(display(
+        "Encountered NAN after {} computations while solving at timestamp {}",
+        computation,
+        timestamp
+    ))]
+    NAN { computation: usize, timestamp: f64 },
+    #[snafu(display("Zero time span"))]
+    ZeroTimeSpan,
+    #[snafu(display("Initial step has wrong sign"))]
+    InvalidInitstep,
+}
+
+impl Into<Error> for OdeError {
+    fn into(self) -> Error {
+        Error::Ode { err: self }
+    }
 }

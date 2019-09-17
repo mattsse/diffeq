@@ -15,12 +15,57 @@ pub enum RKSymbol {
     Dopri5,
     Feh78,
     /// (Name, Order)
-    Other((String, usize)),
+    Other((String, RKOrder)),
 }
 
 impl RKSymbol {
-    pub fn order(&self) -> usize {
-        unimplemented!()
+    pub fn order(&self) -> RKOrder {
+        match self {
+            RKSymbol::Feuler => RKOrder::Explicit(1),
+            RKSymbol::Midpoint => RKOrder::Explicit(2),
+            RKSymbol::Heun => RKOrder::Explicit(2),
+            RKSymbol::RK4 => RKOrder::Explicit(4),
+            RKSymbol::RK21 => RKOrder::Adaptive((2, 1)),
+            RKSymbol::RK23 => RKOrder::Adaptive((2, 3)),
+            RKSymbol::RK45 => RKOrder::Adaptive((4, 5)),
+            RKSymbol::Dopri5 => RKOrder::Adaptive((5, 4)),
+            RKSymbol::Feh78 => RKOrder::Adaptive((7, 8)),
+            RKSymbol::Other((_, order)) => order.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RKOrder {
+    Explicit(usize),
+    Adaptive((usize, usize)),
+}
+
+impl RKOrder {
+    pub fn min(&self) -> usize {
+        match *self {
+            RKOrder::Explicit(o) => o,
+            RKOrder::Adaptive((a, b)) => {
+                if a < b {
+                    a
+                } else {
+                    b
+                }
+            }
+        }
+    }
+
+    pub fn max(&self) -> usize {
+        match *self {
+            RKOrder::Explicit(o) => o,
+            RKOrder::Adaptive((a, b)) => {
+                if a < b {
+                    b
+                } else {
+                    a
+                }
+            }
+        }
     }
 }
 
@@ -57,7 +102,7 @@ where
 
 #[derive(Debug, Clone)]
 pub enum WeightType {
-    Fixed,
+    Explicit,
     Adaptive,
 }
 
@@ -94,7 +139,7 @@ where
     /// the Butcher-Barrier says, that the amount of stages grows faster tha the order.
     /// For `nstages` ≥ 5, more than order 5 is required to solve the system
     #[inline]
-    pub fn order(&self) -> usize {
+    pub fn order(&self) -> RKOrder {
         self.symbol.order()
     }
 
@@ -134,7 +179,7 @@ where
     #[inline]
     pub fn weight_type(&self) -> WeightType {
         match &self.b {
-            Weights::Explicit(_) => WeightType::Fixed,
+            Weights::Explicit(_) => WeightType::Explicit,
             Weights::Adaptive(_) => WeightType::Adaptive,
         }
     }
