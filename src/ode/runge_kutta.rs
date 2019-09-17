@@ -1,6 +1,3 @@
-#![allow(clippy::just_underscores_and_digits)]
-
-use alga::linear::FiniteDimInnerSpace;
 use na::allocator::Allocator;
 use na::*;
 use num_traits::identities::{One, Zero};
@@ -28,6 +25,8 @@ impl RKSymbol {
 }
 
 /// Tableua of the form
+///
+/// ```text
 ///  c1  | a_11   ....   a_1s
 ///  .   | a_21 .          .
 ///  .   | a_31     .      .
@@ -36,6 +35,7 @@ impl RKSymbol {
 /// -----+--------------------
 ///      | b_1     ...   b_s   this is the one used for stepping
 ///      | b'_1    ...   b'_s  this is the one used for error-checking
+/// ```
 ///
 /// where `T` is the type of the coefficients
 /// and `S` is the number of stages (an int)
@@ -43,13 +43,13 @@ impl RKSymbol {
 pub struct ButcherTableau<T: RealField, S: Dim>
 where
     DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
+        Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
 {
     /// identifier for the rk method
     pub symbol: RKSymbol,
     /// coefficients - rk matrix
     pub a: MatrixN<T, S>,
-    /// weights
+    /// weights, adaptive weights are column major, means 2 fixed columns and `S` rows
     pub b: Weights<T, S>,
     /// nodes
     pub c: VectorN<T, S>,
@@ -64,33 +64,24 @@ pub enum WeightType {
 #[derive(Debug, Clone)]
 pub enum Weights<N: RealField, S: Dim>
 where
-    DefaultAllocator: Allocator<N, S> + Allocator<N, U2, S>,
+    DefaultAllocator: Allocator<N, S> + Allocator<N, S, U2>,
 {
-    // TODO use also MatrixMN<N, U2, S> for ease of use? or swap MN for Adaptive?
     Explicit(VectorN<N, S>),
     /// Adaptive weights where
-    /// row 1 is used for stepping
-    /// row 2 is used for error-checking
-    Adaptive(MatrixMN<N, U2, S>),
+    /// column 1 is used for stepping
+    /// column 2 is used for error-checking
+    Adaptive(MatrixMN<N, S, U2>),
 }
 
 impl<N: RealField, S: Dim> Weights<N, S>
 where
-    DefaultAllocator: Allocator<N, S> + Allocator<N, U2, S>,
+    DefaultAllocator: Allocator<N, S> + Allocator<N, S, U2>,
 {
-    // TODO refactor, find better solution to separate fixed and daptive, is every btab adaptable?
     pub fn as_slice(&self) -> &[N] {
         match self {
             Weights::Explicit(e) => e.as_slice(),
             Weights::Adaptive(a) => a.as_slice(),
         }
-    }
-
-    pub fn weights(&self) {
-        let r = match self {
-            Weights::Explicit(e) => {}
-            Weights::Adaptive(a) => {}
-        };
     }
 }
 
@@ -98,7 +89,7 @@ where
 impl<T: RealField, S: Dim> ButcherTableau<T, S>
 where
     DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
+        Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
 {
     /// the Butcher-Barrier says, that the amount of stages grows faster tha the order.
     /// For `nstages` ≥ 5, more than order 5 is required to solve the system
@@ -127,7 +118,7 @@ where
     }
 
     #[inline]
-    pub fn is_fixed(&self) -> bool {
+    pub fn is_explicit(&self) -> bool {
         match &self.b {
             Weights::Explicit(_) => true,
             _ => false,
@@ -136,7 +127,7 @@ where
 
     #[inline]
     pub fn is_adaptive(&self) -> bool {
-        !self.is_fixed()
+        !self.is_explicit()
     }
 
     #[inline]
@@ -152,9 +143,7 @@ where
     pub fn is_first_same_as_last(&self) -> bool {
         let b = self.b.as_slice();
         let row_idx = self.nstages() - 1;
-        println!("b {:?}", b);
         for c in 0..self.nstages() {
-            println!("a: {}    b: {}", self.a[(row_idx, c)], b[c]);
             if self.a[(row_idx, c)] != b[c] {
                 return false;
             }
@@ -163,13 +152,10 @@ where
     }
 }
 
-// TODO impl access funs
-// https://github.com/srenevey/ode-solvers/blob/master/src/butcher_tableau.rs#L388
-
 impl<T: RealField, S: Dim> fmt::Display for ButcherTableau<T, S>
 where
     DefaultAllocator:
-        Allocator<T, U1, S> + Allocator<T, U2, S> + Allocator<T, S, S> + Allocator<T, S>,
+        Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for row in 0..self.nstages() {
@@ -182,16 +168,16 @@ where
         write!(f, "-------+")?;
         write!(f, "{}", "------".repeat(self.nstages()))?;
         match &self.b {
-            Weights::Explicit(fixed) => {
+            Weights::Explicit(explicit) => {
                 write!(f, "\n       |")?;
-                for b in fixed.iter() {
+                for b in explicit.iter() {
                     write!(f, " {:.3}", b)?;
                 }
             }
             Weights::Adaptive(adapt) => {
-                for row in 0..adapt.nrows() {
+                for col in 0..adapt.ncols() {
                     write!(f, "\n       |")?;
-                    for col in 0..self.nstages() {
+                    for row in 0..self.nstages() {
                         write!(f, " {:.3}", adapt[(row, col)])?;
                     }
                 }
@@ -224,6 +210,13 @@ impl ButcherTableau<f64, U1> {
 
 impl ButcherTableau<f64, U2> {
     /// the midpoint method https://en.wikipedia.org/wiki/Midpoint_method
+    ///
+    /// ```text
+    ///  0.000 | 0.000 0.000
+    ///  0.500 | 0.500 0.000
+    /// -------+------------
+    ///        | 0.000 1.000
+    /// ```
     pub fn midpoint() -> Self {
         let a = Matrix2::new(0., 0., 0.5, 0.0);
         let b = Weights::Explicit(Vector2::new(0., 1.0));
@@ -236,6 +229,7 @@ impl ButcherTableau<f64, U2> {
             c,
         }
     }
+
     ///
     /// ```text
     ///  0.000 | 0.000 0.000
@@ -271,6 +265,15 @@ impl ButcherTableau<f64, U2> {
 }
 
 impl ButcherTableau<f64, U4> {
+    /// ```text
+    ///  0.000 | 0.000 0.000 0.000 0.000
+    ///  0.500 | 0.500 0.000 0.000 0.000
+    ///  0.750 | 0.000 0.750 0.000 0.000
+    ///  1.000 | 0.222 0.333 0.444 0.000
+    /// -------+------------------------
+    ///        | 0.292 0.250 0.333 0.125
+    ///        | 0.111 0.333 0.444 0.000
+    /// ```
     pub fn rk23() -> Self {
         let a = Matrix4::new(
             0.,
@@ -290,16 +293,17 @@ impl ButcherTableau<f64, U4> {
             4. / 9.,
             0.,
         );
-        let b = Weights::Adaptive(Matrix2x4::new(
+        let b = Weights::Adaptive(Matrix4x2::new(
             7. / 24.,
+            1. / 9.,
             0.25,
             1. / 3.,
-            0.125,
-            1. / 9.,
             1. / 3.,
             4. / 9.,
+            0.125,
             0.,
         ));
+
         let c = Vector4::new(0., 0.5, 0.75, 1.);
 
         Self {
@@ -322,11 +326,10 @@ impl ButcherTableau<f64, U4> {
     ///    | 0.167 0.333 0.333 0.167
     /// ```
     pub fn rk4() -> Self {
-        let __ = 0.0;
-        let c = Vector4::new(__, 0.5, 0.5, 1.);
+        let c = Vector4::new(0., 0.5, 0.5, 1.);
         let b = Weights::Explicit(Vector4::new(1. / 6., 1. / 3., 1. / 3., 1. / 6.));
         let a = Matrix4::new(
-            __, __, __, __, 0.5, __, __, __, __, 0.5, __, __, __, __, 1., __,
+            0., 0., 0., 0., 0.5, 0., 0., 0., 0., 0.5, 0., 0., 0., 0., 1., 0.,
         );
 
         Self {
@@ -341,6 +344,18 @@ impl ButcherTableau<f64, U4> {
 impl ButcherTableau<f64, U6> {
     /// Fehlberg https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
     /// Order of 4 with an error estimator of order 5
+    ///
+    /// ```text
+    ///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.250 | 0.250 0.000 0.000 0.000 0.000 0.000
+    ///  0.375 | 0.094 0.281 0.000 0.000 0.000 0.000
+    ///  0.923 | 0.879 -3.277 3.321 0.000 0.000 0.000
+    ///  1.000 | 2.032 -8.000 7.173 -0.206 0.000 0.000
+    ///  0.500 | -0.296 2.000 -1.382 0.453 -0.275 0.000
+    /// -------+------------------------------------
+    ///        | 0.116 0.000 0.549 0.535 -0.200 0.000
+    ///        | 0.119 0.000 0.519 0.506 -0.180 0.036
+    /// ```
     pub fn rk45() -> Self {
         let a = Matrix6::new(
             0.,
@@ -380,18 +395,18 @@ impl ButcherTableau<f64, U6> {
             -0.275,
             0.,
         );
-        let b = Weights::Adaptive(Matrix2x6::new(
+        let b = Weights::Adaptive(Matrix6x2::new(
             25. / 216.,
-            0.,
-            1408. / 2565.,
-            2197. / 4104.,
-            -0.2,
-            0.,
             16. / 135.,
             0.,
+            0.,
+            1408. / 2565.,
             6656. / 12825.,
+            2197. / 4104.,
             28561. / 56430.,
+            -0.2,
             -0.18,
+            0.,
             2. / 55.,
         ));
 
@@ -405,17 +420,19 @@ impl ButcherTableau<f64, U6> {
         }
     }
 }
-///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000
-///  0.200 | 0.200 0.000 0.000 0.000 0.000 0.000 0.000
-///  0.300 | 0.075 0.225 0.000 0.000 0.000 0.000 0.000
-///  0.750 | 0.978 -3.733 3.556 0.000 0.000 0.000 0.000
-///  0.889 | 2.953 -11.596 9.823 -0.291 0.000 0.000 0.000
-///  1.000 | 2.846 -10.758 8.906 0.278 -0.274 0.000 0.000
-///  1.000 | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
-/// -------+------------------------------------------
-///        | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
-///        | 0.090 0.000 0.453 0.614 -0.272 0.089 0.025
 impl ButcherTableau<f64, U7> {
+    /// ```text
+    ///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.200 | 0.200 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.300 | 0.075 0.225 0.000 0.000 0.000 0.000 0.000
+    ///  0.750 | 0.978 -3.733 3.556 0.000 0.000 0.000 0.000
+    ///  0.889 | 2.953 -11.596 9.823 -0.291 0.000 0.000 0.000
+    ///  1.000 | 2.846 -10.758 8.906 0.278 -0.274 0.000 0.000
+    ///  1.000 | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
+    /// -------+------------------------------------------
+    ///        | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
+    ///        | 0.090 0.000 0.453 0.614 -0.272 0.089 0.025
+    /// ```
     pub fn dopri5() -> Self {
         let a = MatrixMN::from_row_slice_generic(
             U7,
@@ -473,22 +490,22 @@ impl ButcherTableau<f64, U7> {
             ],
         );
         let b = Weights::Adaptive(MatrixMN::from_row_slice_generic(
-            U2,
             U7,
+            U2,
             &[
                 35. / 384.,
-                0.,
-                500. / 1113.,
-                125. / 192.,
-                -2187. / 6784.,
-                11. / 84.,
-                0.,
                 5179. / 57600.,
                 0.,
+                0.,
+                500. / 1113.,
                 7571. / 16695.,
+                125. / 192.,
                 393. / 640.,
+                -2187. / 6784.,
                 -92097. / 339_200.,
+                11. / 84.,
                 187. / 2100.,
+                0.,
                 0.025,
             ],
         ));
@@ -504,6 +521,22 @@ impl ButcherTableau<f64, U7> {
 }
 
 impl ButcherTableau<f64, U13> {
+    ///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.074 | 0.074 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.111 | 0.028 0.083 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.167 | 0.042 0.000 0.125 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.417 | 0.417 0.000 -1.562 1.562 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.500 | 0.500 0.000 0.000 0.750 0.200 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.833 | -0.231 0.000 0.000 1.157 -2.407 2.315 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.167 | 0.103 0.000 0.000 0.000 0.271 -0.222 0.014 0.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.667 | 2.000 0.000 0.000 -8.833 15.644 -11.889 0.744 3.000 0.000 0.000 0.000 0.000 0.000
+    ///  0.333 | -0.843 0.000 0.000 0.213 -7.230 5.759 -0.317 2.833 -0.083 0.000 0.000 0.000 0.000
+    ///  1.000 | 0.581 0.000 0.000 -2.079 4.386 -3.671 0.520 0.549 0.274 0.439 0.000 0.000 0.000
+    ///  0.000 | 0.015 0.000 0.000 0.000 0.000 -0.146 -0.015 -0.073 0.073 0.146 0.000 0.000 0.000
+    ///  1.000 | -0.433 0.000 0.000 -2.079 4.386 -3.524 0.535 0.622 0.201 0.293 0.000 1.000 0.000
+    /// -------+------------------------------------------------------------------------------
+    ///        | 0.049 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.324 0.324 0.257
+    ///        | 0.257 0.257 0.257 0.032 0.032 0.032 0.032 0.049 0.000 0.000 0.049 0.000 0.049
     pub fn feh78() -> Self {
         let a = MatrixMN::from_row_slice_generic(
             U13,
@@ -681,34 +714,34 @@ impl ButcherTableau<f64, U13> {
             ],
         );
         let b = Weights::Adaptive(MatrixMN::from_row_slice_generic(
-            U2,
             U13,
+            U2,
             &[
                 41. / 840.,
+                9. / 35.,
+                0.,
+                9. / 35.,
+                0.,
+                9. / 35.,
+                0.,
+                9. / 280.,
+                0.,
+                9. / 280.,
+                0.,
+                9. / 280.,
+                0.,
+                9. / 280.,
+                0.,
+                41. / 840.,
                 0.,
                 0.,
                 0.,
                 0.,
                 34. / 105.,
-                9. / 35.,
-                9. / 35.,
-                9. / 280.,
-                9. / 280.,
                 41. / 840.,
-                0.,
-                0.,
-                0.,
-                0.,
-                0.,
-                0.,
-                0.,
                 34. / 105.,
-                9. / 35.,
-                9. / 35.,
-                9. / 280.,
-                9. / 280.,
                 0.,
-                41. / 840.,
+                9. / 35.,
                 41. / 840.,
             ],
         ));

@@ -126,7 +126,7 @@ where
         opts: Ops,
     ) where
         DefaultAllocator: Allocator<f64, U1, S>
-            + Allocator<f64, U2, S>
+            + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
@@ -165,7 +165,7 @@ where
     fn oderk_fixed<S: Dim>(&self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
-            + Allocator<f64, U2, S>
+            + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
@@ -210,7 +210,7 @@ where
     fn calc_error<S: Dim>(&self, ks: &[Y], btab: &ButcherTableau<f64, S>, dt: f64) -> Y
     where
         DefaultAllocator: Allocator<f64, U1, S>
-            + Allocator<f64, U2, S>
+            + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
@@ -225,7 +225,7 @@ where
                 // adapt in every dimension
                 for d in 0..err.dof() {
                     // subtract b_1s from b_0s
-                    let weight_err = b[(0, s)] - b[(1, s)];
+                    let weight_err = b[(s, 0)] - b[(s, 1)];
                     *err.get_mut(d) += k.get(d) * weight_err;
                 }
             }
@@ -244,7 +244,7 @@ where
     pub fn calc_ks<S: Dim>(&self, btab: &ButcherTableau<f64, S>, t: f64, yn: &Y, dt: f64) -> Vec<Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
-            + Allocator<f64, U2, S>
+            + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
@@ -287,7 +287,7 @@ where
     ) -> (Y, Y)
     where
         DefaultAllocator: Allocator<f64, U1, S>
-            + Allocator<f64, U2, S>
+            + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
@@ -301,13 +301,13 @@ where
         if let Weights::Adaptive(b) = &btab.b {
             for d in 0..yn.dof() {
                 *ytrial.get_mut(d) += ks[0].get(d) * b[(0, 0)];
-                *yerr.get_mut(d) += ks[0].get(d) * b[(1, 0)];
+                *yerr.get_mut(d) += ks[0].get(d) * b[(0, 1)];
             }
 
             for s in 1..btab.nstages() {
                 for d in 0..yn.dof() {
-                    *ytrial.get_mut(d) += ks[s].get(d) * b[(0, s)];
-                    *yerr.get_mut(d) += ks[s].get(d) * b[(1, s)];
+                    *ytrial.get_mut(d) += ks[s].get(d) * b[(s, 0)];
+                    *yerr.get_mut(d) += ks[s].get(d) * b[(s, 1)];
                 }
             }
             for d in 0..yn.dof() {
