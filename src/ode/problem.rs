@@ -335,14 +335,53 @@ where
         let theta = (tquery - t) / dt;
 
         for i in 0..y0.dof() {
-            *y.get_mut(i) = (y0.get(i) * (1. - theta)
+            let val = (y0.get(i) * (1. - theta)
                 + y1.get(i) * theta
                 + (y1.get(i) - y0.get(i))
                     * theta
                     * (theta - 1.)
-                    * (f0.get(i) * (theta - 1.) * dt + f1.get(i) * theta * dt + (1. - 2. * theta)))
+                    * (f0.get(i) * (theta - 1.) * dt + f1.get(i) * theta * dt + (1. - 2. * theta)));
+            y.insert(i, val);
         }
         y
+    }
+
+    /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
+    ///
+    pub fn stepsize_hw92(
+        &self,
+        dt: f64,
+        tdir: f64,
+        x0: &Y,
+        xtrial: &Y,
+        xerr: &mut Y,
+        order: f64,
+        timeout: usize,
+        abstol: f64,
+        reltol: f64,
+        maxstep: f64,
+        norm: f64,
+    ) -> StepH92 {
+        let timeout_after_nan = 5usize;
+
+        for d in 0..x0.dof() {
+            if std::f64::NAN == xtrial.get(d).into() {
+                return StepH92 {
+                    err: 10.,
+                    dt: 0.2 * dt,
+                    timeout_ctn: timeout_after_nan,
+                };
+            }
+        }
+
+        //        # in-place calculate xerr./tol
+        //        for d = 1:dof
+        //        # if outside of domain (usually NaN) then make step size smaller by maximum
+        //        isoutofdomain(xtrial[d]) && return T(10), dt * facmin, timout_after_nan
+        //        xerr[d] = xerr[d] / (abstol + max(norm(x0[d]), norm(xtrial[d])) * reltol) # Eq 4.10
+        //        end
+
+        unimplemented!()
     }
 
     /// estimator for initial step based on book
@@ -409,6 +448,13 @@ pub struct InitialHint<Y> {
     tdir: f64,
     /// initial evaluation of the problem function
     f0: Y,
+}
+
+#[derive(Debug)]
+pub struct StepH92 {
+    err: f64,
+    dt: f64,
+    timeout_ctn: usize,
 }
 
 // TODO rm `T`, use f64 instead

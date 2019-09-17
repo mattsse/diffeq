@@ -66,7 +66,8 @@ pub enum Weights<N: RealField, S: Dim>
 where
     DefaultAllocator: Allocator<N, S> + Allocator<N, U2, S>,
 {
-    Fixed(VectorN<N, S>),
+    // TODO use also MatrixMN<N, U2, S> for ease of use? or swap MN for Adaptive?
+    Explicit(VectorN<N, S>),
     /// Adaptive weights where
     /// row 1 is used for stepping
     /// row 2 is used for error-checking
@@ -80,9 +81,16 @@ where
     // TODO refactor, find better solution to separate fixed and daptive, is every btab adaptable?
     pub fn as_slice(&self) -> &[N] {
         match self {
-            Weights::Fixed(f) => f.as_slice(),
+            Weights::Explicit(e) => e.as_slice(),
             Weights::Adaptive(a) => a.as_slice(),
         }
+    }
+
+    pub fn weights(&self) {
+        let r = match self {
+            Weights::Explicit(e) => {}
+            Weights::Adaptive(a) => {}
+        };
     }
 }
 
@@ -121,7 +129,7 @@ where
     #[inline]
     pub fn is_fixed(&self) -> bool {
         match &self.b {
-            Weights::Fixed(_) => true,
+            Weights::Explicit(_) => true,
             _ => false,
         }
     }
@@ -134,9 +142,24 @@ where
     #[inline]
     pub fn weight_type(&self) -> WeightType {
         match &self.b {
-            Weights::Fixed(_) => WeightType::Fixed,
+            Weights::Explicit(_) => WeightType::Fixed,
             Weights::Adaptive(_) => WeightType::Adaptive,
         }
+    }
+
+    /// First same as last. c.f. H&W p.167
+    #[inline]
+    pub fn is_first_same_as_last(&self) -> bool {
+        let b = self.b.as_slice();
+        let row_idx = self.nstages() - 1;
+        println!("b {:?}", b);
+        for c in 0..self.nstages() {
+            println!("a: {}    b: {}", self.a[(row_idx, c)], b[c]);
+            if self.a[(row_idx, c)] != b[c] {
+                return false;
+            }
+        }
+        self.c[row_idx] == T::one()
     }
 }
 
@@ -159,7 +182,7 @@ where
         write!(f, "-------+")?;
         write!(f, "{}", "------".repeat(self.nstages()))?;
         match &self.b {
-            Weights::Fixed(fixed) => {
+            Weights::Explicit(fixed) => {
                 write!(f, "\n       |")?;
                 for b in fixed.iter() {
                     write!(f, " {:.3}", b)?;
@@ -187,7 +210,7 @@ impl ButcherTableau<f64, U1> {
     /// ```
     pub fn feuler() -> Self {
         let a = Matrix1::zero();
-        let b = Weights::Fixed(Vector1::one());
+        let b = Weights::Explicit(Vector1::one());
         let c = Vector1::zero();
 
         Self {
@@ -203,7 +226,7 @@ impl ButcherTableau<f64, U2> {
     /// the midpoint method https://en.wikipedia.org/wiki/Midpoint_method
     pub fn midpoint() -> Self {
         let a = Matrix2::new(0., 0., 0.5, 0.0);
-        let b = Weights::Fixed(Vector2::new(0., 1.0));
+        let b = Weights::Explicit(Vector2::new(0., 1.0));
         let c = Vector2::new(0., 0.5);
 
         Self {
@@ -222,7 +245,7 @@ impl ButcherTableau<f64, U2> {
     /// ```
     pub fn heun() -> Self {
         let a = Matrix2::new(0., 0., 1., 0.);
-        let b = Weights::Fixed(Vector2::new(0.5, 0.5));
+        let b = Weights::Explicit(Vector2::new(0.5, 0.5));
         let c = Vector2::new(0., 1.);
 
         Self {
@@ -301,7 +324,7 @@ impl ButcherTableau<f64, U4> {
     pub fn rk4() -> Self {
         let __ = 0.0;
         let c = Vector4::new(__, 0.5, 0.5, 1.);
-        let b = Weights::Fixed(Vector4::new(1. / 6., 1. / 3., 1. / 3., 1. / 6.));
+        let b = Weights::Explicit(Vector4::new(1. / 6., 1. / 3., 1. / 3., 1. / 6.));
         let a = Matrix4::new(
             __, __, __, __, 0.5, __, __, __, __, 0.5, __, __, __, __, 1., __,
         );
@@ -382,7 +405,16 @@ impl ButcherTableau<f64, U6> {
         }
     }
 }
-
+///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000
+///  0.200 | 0.200 0.000 0.000 0.000 0.000 0.000 0.000
+///  0.300 | 0.075 0.225 0.000 0.000 0.000 0.000 0.000
+///  0.750 | 0.978 -3.733 3.556 0.000 0.000 0.000 0.000
+///  0.889 | 2.953 -11.596 9.823 -0.291 0.000 0.000 0.000
+///  1.000 | 2.846 -10.758 8.906 0.278 -0.274 0.000 0.000
+///  1.000 | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
+/// -------+------------------------------------------
+///        | 0.091 0.000 0.449 0.651 -0.322 0.131 0.000
+///        | 0.090 0.000 0.453 0.614 -0.272 0.089 0.025
 impl ButcherTableau<f64, U7> {
     pub fn dopri5() -> Self {
         let a = MatrixMN::from_row_slice_generic(
@@ -720,5 +752,12 @@ mod tests {
         assert!(ButcherTableau::heun().is_consistent_rk());
         assert!(ButcherTableau::rk21().is_consistent_rk());
         assert!(ButcherTableau::rk4().is_consistent_rk());
+    }
+
+    #[test]
+    fn is_fsal() {
+        assert!(!ButcherTableau::midpoint().is_first_same_as_last());
+        println!("{}", ButcherTableau::dopri5());
+        assert!(ButcherTableau::dopri5().is_first_same_as_last());
     }
 }
