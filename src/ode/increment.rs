@@ -3,6 +3,7 @@ use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 
+// TODO rename to Coeffs
 pub struct IncrementMap<Y: OdeType> {
     inner: Vec<IncrementValue<Y>>,
 }
@@ -106,6 +107,7 @@ impl<'a, Y: OdeType> Iterator for Ys<'a, Y> {
 }
 
 /// pairs the increment `k` with it's approximation `y`
+// TODO include also timestamp?
 #[derive(Debug, Clone)]
 pub struct IncrementValue<Y: OdeType> {
     pub k: Y,

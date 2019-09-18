@@ -48,3 +48,11 @@ impl Into<Error> for OdeError {
         Error::Ode { err: self }
     }
 }
+
+/// Enumeration of the errors that may arise during integration.
+#[derive(Debug)]
+pub enum IntegrationError {
+    MaxNumStepReached { x: f64, n_step: u32 },
+    StepSizeUnderflow { x: f64 },
+    StiffnessDetected { x: f64 },
+}

@@ -104,13 +104,16 @@ where
     }
 }
 
-// TODO fix Into<f64>
+// TODO fix Into<f64> na::convert ?
 impl<F, Y, T> OdeProblem<F, Y>
 where
     F: Fn(f64, &Y) -> Y,
     T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Into<f64>,
     Y: OdeType<Item = T>,
 {
+    /// after step reduction do not increase step for timeout controlled steps
+    const STEP_TIMEOUT_CNT: usize = 5;
+
     /// convenience method to create a new builder
     /// same as `OdeBuilder::default()`
     pub fn builder() -> OdeBuilder<F, Y> {
@@ -170,7 +173,6 @@ where
             reltol,
             abstol,
         )?;
-
         let dt = if signum(ops.initstep.0) == init.tdir {
             ops.initstep.0
         } else {
@@ -179,19 +181,47 @@ where
 
         // integration loop
         let mut timeout = 0usize;
-
-        let increments = self.calc_increments(
-            btab,
-            tstart,
-            IncrementValue::new(init.f0.clone(), self.y0.clone()),
-            dt,
-        );
-
-        // k0 is just the function call
+        let order = btab.symbol.order().min();
+        let mut diagnostics = Diagnostics::default();
 
         loop {
+            // k0 is just the function call
+            let increments = self.calc_increments(
+                btab,
+                tstart,
+                IncrementValue::new(init.f0.clone(), self.y0.clone()),
+                dt,
+            );
 
-            //            let (ytrial, yerr) = self.embedded_step(&y0, )?
+            let y = &self.y0;
+            let (ytrial, mut yerr) = self.embedded_step(y, &increments, tstart, dt, btab)?;
+
+            // check error and find a new step size
+
+            let step = self.stepsize_hw92(
+                dt,
+                init.tdir,
+                y,
+                &ytrial,
+                &mut yerr,
+                order,
+                timeout,
+                abstol,
+                reltol,
+                maxstep,
+                PNorm::default(),
+            );
+
+            if step.err < 1. {
+                // accept step
+                diagnostics.accepted_steps += 1;
+            } else if step.dt.abs() > minstep {
+                // minimum step size reached
+                break;
+            } else {
+                // redo step with smaller dt
+                diagnostics.rejected_steps += 1;
+            }
         }
         // integration loop
 
@@ -428,33 +458,45 @@ where
         x0: &Y,
         xtrial: &Y,
         xerr: &mut Y,
-        order: f64,
-        timeout: usize,
+        order: usize,
+        mut timeout: usize,
         abstol: f64,
         reltol: f64,
         maxstep: f64,
-        norm: f64,
-    ) -> StepH92 {
-        let timeout_after_nan = 5usize;
+        norm: PNorm,
+    ) -> StepHW92 {
+        let fac = 0.8;
+        let facmax = 5.;
+        let facmin = 0.2;
 
         for d in 0..x0.dof() {
             if std::f64::NAN == xtrial.get(d).into() {
-                return StepH92 {
+                return StepHW92 {
                     err: 10.,
-                    dt: 0.2 * dt,
-                    timeout_ctn: timeout_after_nan,
+                    dt: facmin * dt,
+                    timeout_ctn: Self::STEP_TIMEOUT_CNT,
                 };
             }
+
+            *xerr.get_mut(d) /= (x0.get(d).norm1().max(xtrial.get(d).norm1()) * reltol + abstol);
         }
 
-        //        # in-place calculate xerr./tol
-        //        for d = 1:dof
-        //        # if outside of domain (usually NaN) then make step size smaller by maximum
-        //        isoutofdomain(xtrial[d]) && return T(10), dt * facmin, timout_after_nan
-        //        xerr[d] = xerr[d] / (abstol + max(norm(x0[d]), norm(xtrial[d])) * reltol) # Eq 4.10
-        //        end
+        let err = xerr.pnorm(PNorm::default()).into();
 
-        unimplemented!()
+        let pow = (1 / (order + 1)) as i32;
+
+        let mut new_dt = maxstep.min(facmin.max(err.powi(-1).powi(pow).into()) * tdir * dt);
+
+        if timeout > 0 {
+            new_dt = new_dt.min(dt);
+            timeout -= 1;
+        }
+
+        StepHW92 {
+            err,
+            dt: tdir * new_dt,
+            timeout_ctn: timeout,
+        }
     }
 
     /// estimator for initial step based on book
@@ -526,10 +568,27 @@ pub struct InitialHint<Y> {
 }
 
 #[derive(Debug)]
-pub struct StepH92 {
+pub struct StepHW92 {
+    // TODO change to T RealField?
     err: f64,
     dt: f64,
     timeout_ctn: usize,
+}
+
+/// Contains some diagnostics of the integration.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Diagnostics {
+    pub num_eval: u32,
+    pub accepted_steps: u32,
+    pub rejected_steps: u32,
+}
+
+impl fmt::Display for Diagnostics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Number of function evaluations: {}", self.num_eval)?;
+        writeln!(f, "Number of accepted steps: {}", self.accepted_steps)?;
+        write!(f, "Number of rejected steps: {}", self.rejected_steps)
+    }
 }
 
 // TODO rm `T`, use f64 instead
