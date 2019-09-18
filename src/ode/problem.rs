@@ -9,7 +9,6 @@ use num_traits::{abs, signum};
 use std::fmt;
 use std::iter::FromIterator;
 use std::ops::{Add, Mul};
-use std::slice::Iter;
 
 /// F: the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t)
 /// and returns dy/dt::typeof(y/t)
@@ -180,14 +179,19 @@ where
 
         // integration loop
         let mut timeout = 0usize;
-        let mut ks: Vec<Y> = Vec::with_capacity(btab.nstages());
+
+        let increments = self.calc_increments(
+            btab,
+            tstart,
+            IncrementValue::new(init.f0.clone(), self.y0.clone()),
+            dt,
+        );
 
         // k0 is just the function call
-        ks.push(init.f0);
 
         loop {
 
-            //            let (ytrial, yerr) = self.embedded_step(&y0, )
+            //            let (ytrial, yerr) = self.embedded_step(&y0, )?
         }
         // integration loop
 
@@ -234,7 +238,12 @@ where
             let b = btab.b.as_slice();
             // loop over all stages and k values of the butcher tableau
             for (s, k) in self
-                .calc_increments(btab, self.tspan[i], &ys[i], dt)
+                .calc_increments(
+                    btab,
+                    self.tspan[i],
+                    IncrementValue::new((self.f)(self.tspan[i], &yi), yi.clone()),
+                    dt,
+                )
                 .ks()
                 .enumerate()
             {
@@ -255,22 +264,26 @@ where
     /// ```latex
     /// e_{n+1}=h\sum _{i=1}^{s}(b_{i}-b_{i}^{*})k_{i}
     /// ```
-    // TODO refactor with Incrementmap
-    fn calc_error<S: Dim>(&self, ks: &[Y], btab: &ButcherTableau<f64, S>, dt: f64) -> Y
+    fn calc_error<S: Dim>(
+        &self,
+        increments: &IncrementMap<Y>,
+        btab: &ButcherTableau<f64, S>,
+        dt: f64,
+    ) -> Result<Y, OdeError>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        assert_eq!(btab.nstages(), ks.len());
+        assert_eq!(btab.nstages(), increments.len());
 
         // get copy of the Odetype and ensure default values
-        let mut err = ks[0].clone();
+        let mut err = increments[0].k.clone();
         err.set_zero();
 
         if let Weights::Adaptive(b) = &btab.b {
-            for (s, k) in ks.iter().enumerate() {
+            for (s, k) in increments.ks().enumerate() {
                 // adapt in every dimension
                 for d in 0..err.dof() {
                     // subtract b_1s from b_0s
@@ -278,23 +291,28 @@ where
                     *err.get_mut(d) += k.get(d) * weight_err;
                 }
             }
-        }
+            // multiply with stepsize
+            for d in 0..err.dof() {
+                err.insert(d, err.get(d) * dt);
+            }
 
-        // multiply with stepsize
-        for d in 0..err.dof() {
-            let sum = err.get(d);
-            *err.get_mut(d) = sum * dt;
+            Ok(err)
+        } else {
+            Err(OdeError::InvalidButcherTableauWeightType {
+                expected: WeightType::Adaptive,
+                got: WeightType::Explicit,
+            })
         }
-
-        err
     }
 
     /// calculates all increment values for a given value `yn` at a specific time `t`
+    /// creates an `IncrementMap` with the calculated increments `k` and their
+    /// approximations `y` of size `S`, the number of stages of the butcher tableau
     pub fn calc_increments<S: Dim>(
         &self,
         btab: &ButcherTableau<f64, S>,
         t: f64,
-        yn: &Y,
+        init: IncrementValue<Y>,
         dt: f64,
     ) -> IncrementMap<Y>
     where
@@ -305,13 +323,12 @@ where
     {
         let mut increments = IncrementMap::with_capacity(btab.nstages());
 
-        // k0 is just the function call
-        increments.push(IncrementValue::new((self.f)(t, yn), yn.clone()));
+        increments.push(init);
 
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
-            // need a fresh yn
-            let mut yi = yn.clone();
+            // need a fresh y
+            let mut yi = increments[0].y.clone();
 
             // loop over all previous computed ks
             for k in increments.ks() {
@@ -319,7 +336,7 @@ where
                 for j in 0..btab.nstages() - 1 {
                     let a = btab.a[(s, j)];
                     // adapt in all dimensions
-                    for d in 0..yn.dof() {
+                    for d in 0..yi.dof() {
                         *yi.get_mut(d) += k.get(d) * dt * a;
                     }
                 }
@@ -334,11 +351,11 @@ where
     pub fn embedded_step<S: Dim>(
         &self,
         yn: &Y,
-        ks: &[Y],
+        increments: &IncrementMap<Y>,
         t: f64,
         dt: f64,
         btab: &ButcherTableau<f64, S>,
-    ) -> (Y, Y)
+    ) -> Result<(Y, Y), OdeError>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
@@ -353,24 +370,25 @@ where
         let mut yerr = ytrial.clone();
 
         if let Weights::Adaptive(b) = &btab.b {
-            for d in 0..yn.dof() {
-                *ytrial.get_mut(d) += ks[0].get(d) * b[(0, 0)];
-                *yerr.get_mut(d) += ks[0].get(d) * b[(0, 1)];
-            }
-
-            for s in 1..btab.nstages() {
+            for (s, k) in increments.ks().take(btab.nstages()).enumerate() {
                 for d in 0..yn.dof() {
-                    *ytrial.get_mut(d) += ks[s].get(d) * b[(s, 0)];
-                    *yerr.get_mut(d) += ks[s].get(d) * b[(s, 1)];
+                    *ytrial.get_mut(d) += k.get(d) * b[(s, 0)];
+                    *yerr.get_mut(d) += k.get(d) * b[(s, 1)];
                 }
             }
 
             for d in 0..yn.dof() {
-                *ytrial.get_mut(d) = yn.get(d) + ytrial.get(d) * dt;
-                *yerr.get_mut(d) = (ytrial.get(d) - yerr.get(d)) * dt;
+                ytrial.insert(d, yn.get(d) + ytrial.get(d) * dt);
+                yerr.insert(d, (ytrial.get(d) - yerr.get(d)) * dt);
             }
+
+            Ok((ytrial, yerr))
+        } else {
+            Err(OdeError::InvalidButcherTableauWeightType {
+                expected: WeightType::Adaptive,
+                got: WeightType::Explicit,
+            })
         }
-        (ytrial, yerr)
     }
 
     /// For dense output see Hairer & Wanner p.190 using Hermite

@@ -1,11 +1,13 @@
-use crate::ode::types::OdeType;
+use crate::ode::runge_kutta::ButcherTableau;
+use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
+use alga::general::RealField;
+use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 
 pub struct IncrementMap<Y: OdeType> {
     inner: Vec<IncrementValue<Y>>,
 }
 
 impl<Y: OdeType> IncrementMap<Y> {
-
     #[inline]
     pub fn new() -> Self {
         Self { inner: Vec::new() }
@@ -43,7 +45,6 @@ impl<Y: OdeType> std::ops::Deref for IncrementMap<Y> {
 }
 
 impl<Y: OdeType> std::ops::DerefMut for IncrementMap<Y> {
-
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
@@ -112,7 +113,6 @@ pub struct IncrementValue<Y: OdeType> {
 }
 
 impl<Y: OdeType> IncrementValue<Y> {
-
     #[inline]
     pub fn new(k: Y, y: Y) -> Self {
         Self { k, y }
