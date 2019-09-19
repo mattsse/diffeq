@@ -1,5 +1,5 @@
 use crate::error::{Error, OdeError, Result};
-use crate::ode::increment::{IncrementMap, IncrementValue};
+use crate::ode::increment::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
@@ -186,10 +186,10 @@ where
 
         loop {
             // k0 is just the function call
-            let increments = self.calc_increments(
+            let increments = self.calc_coefficients(
                 btab,
                 tstart,
-                IncrementValue::new(init.f0.clone(), self.y0.clone()),
+                CoefficientPoint::new(init.f0.clone(), self.y0.clone()),
                 dt,
             );
 
@@ -268,10 +268,10 @@ where
             let b = btab.b.as_slice();
             // loop over all stages and k values of the butcher tableau
             for (s, k) in self
-                .calc_increments(
+                .calc_coefficients(
                     btab,
                     self.tspan[i],
-                    IncrementValue::new((self.f)(self.tspan[i], &yi), yi.clone()),
+                    CoefficientPoint::new((self.f)(self.tspan[i], &yi), yi.clone()),
                     dt,
                 )
                 .ks()
@@ -296,7 +296,7 @@ where
     /// ```
     fn calc_error<S: Dim>(
         &self,
-        increments: &IncrementMap<Y>,
+        increments: &CoefficientMap<Y>,
         btab: &ButcherTableau<f64, S>,
         dt: f64,
     ) -> Result<Y, OdeError>
@@ -335,23 +335,23 @@ where
         }
     }
 
-    /// calculates all increment values for a given value `yn` at a specific time `t`
+    /// calculates all coefficients values for a given value `yn` at a specific time `t`
     /// creates an `IncrementMap` with the calculated increments `k` and their
     /// approximations `y` of size `S`, the number of stages of the butcher tableau
-    pub fn calc_increments<S: Dim>(
+    pub fn calc_coefficients<S: Dim>(
         &self,
         btab: &ButcherTableau<f64, S>,
         t: f64,
-        init: IncrementValue<Y>,
+        init: CoefficientPoint<Y>,
         dt: f64,
-    ) -> IncrementMap<Y>
+    ) -> CoefficientMap<Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        let mut increments = IncrementMap::with_capacity(btab.nstages());
+        let mut increments = CoefficientMap::with_capacity(btab.nstages());
 
         increments.push(init);
 
@@ -372,7 +372,7 @@ where
                 }
             }
             // compute the next k value
-            increments.push(IncrementValue::new((self.f)(tn, &yi), yi));
+            increments.push(CoefficientPoint::new((self.f)(tn, &yi), yi));
         }
         increments
     }
@@ -381,7 +381,7 @@ where
     pub fn embedded_step<S: Dim>(
         &self,
         yn: &Y,
-        increments: &IncrementMap<Y>,
+        increments: &CoefficientMap<Y>,
         t: f64,
         dt: f64,
         btab: &ButcherTableau<f64, S>,

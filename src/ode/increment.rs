@@ -3,12 +3,11 @@ use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 
-// TODO rename to Coeffs
-pub struct IncrementMap<Y: OdeType> {
-    inner: Vec<IncrementValue<Y>>,
+pub struct CoefficientMap<Y: OdeType> {
+    inner: Vec<CoefficientPoint<Y>>,
 }
 
-impl<Y: OdeType> IncrementMap<Y> {
+impl<Y: OdeType> CoefficientMap<Y> {
     #[inline]
     pub fn new() -> Self {
         Self { inner: Vec::new() }
@@ -36,8 +35,8 @@ impl<Y: OdeType> IncrementMap<Y> {
     }
 }
 
-impl<Y: OdeType> std::ops::Deref for IncrementMap<Y> {
-    type Target = Vec<IncrementValue<Y>>;
+impl<Y: OdeType> std::ops::Deref for CoefficientMap<Y> {
+    type Target = Vec<CoefficientPoint<Y>>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -45,16 +44,16 @@ impl<Y: OdeType> std::ops::Deref for IncrementMap<Y> {
     }
 }
 
-impl<Y: OdeType> std::ops::DerefMut for IncrementMap<Y> {
+impl<Y: OdeType> std::ops::DerefMut for CoefficientMap<Y> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl<Y: OdeType> IntoIterator for IncrementMap<Y> {
-    type Item = IncrementValue<Y>;
-    type IntoIter = std::vec::IntoIter<IncrementValue<Y>>;
+impl<Y: OdeType> IntoIterator for CoefficientMap<Y> {
+    type Item = CoefficientPoint<Y>;
+    type IntoIter = std::vec::IntoIter<CoefficientPoint<Y>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -62,9 +61,9 @@ impl<Y: OdeType> IntoIterator for IncrementMap<Y> {
     }
 }
 
-impl<'a, Y: OdeType> IntoIterator for &'a IncrementMap<Y> {
-    type Item = &'a IncrementValue<Y>;
-    type IntoIter = std::slice::Iter<'a, IncrementValue<Y>>;
+impl<'a, Y: OdeType> IntoIterator for &'a CoefficientMap<Y> {
+    type Item = &'a CoefficientPoint<Y>;
+    type IntoIter = std::slice::Iter<'a, CoefficientPoint<Y>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -73,7 +72,7 @@ impl<'a, Y: OdeType> IntoIterator for &'a IncrementMap<Y> {
 }
 
 pub struct Ks<'a, Y: OdeType> {
-    inner: std::slice::Iter<'a, IncrementValue<Y>>,
+    inner: std::slice::Iter<'a, CoefficientPoint<Y>>,
 }
 
 impl<'a, Y: OdeType> Iterator for Ks<'a, Y> {
@@ -90,7 +89,7 @@ impl<'a, Y: OdeType> Iterator for Ks<'a, Y> {
 }
 
 pub struct Ys<'a, Y: OdeType> {
-    inner: std::slice::Iter<'a, IncrementValue<Y>>,
+    inner: std::slice::Iter<'a, CoefficientPoint<Y>>,
 }
 
 impl<'a, Y: OdeType> Iterator for Ys<'a, Y> {
@@ -106,15 +105,14 @@ impl<'a, Y: OdeType> Iterator for Ys<'a, Y> {
     }
 }
 
-/// pairs the increment `k` with it's approximation `y`
-// TODO include also timestamp?
+/// pairs the coefficient `k` with it's approximation `y`
 #[derive(Debug, Clone)]
-pub struct IncrementValue<Y: OdeType> {
+pub struct CoefficientPoint<Y: OdeType> {
     pub k: Y,
     pub y: Y,
 }
 
-impl<Y: OdeType> IncrementValue<Y> {
+impl<Y: OdeType> CoefficientPoint<Y> {
     #[inline]
     pub fn new(k: Y, y: Y) -> Self {
         Self { k, y }
