@@ -1,9 +1,10 @@
 use crate::error::{Error, OdeError, Result};
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
-use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
+use crate::ode::options::{AdaptiveOptions, OdeOptionMap, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
-use alga::general::RealField;
+use alga::general::{RealField, SupersetOf};
+use itertools::Itertools;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
@@ -104,16 +105,12 @@ where
     }
 }
 
-// TODO fix Into<f64> na::convert ?
 impl<F, Y, T> OdeProblem<F, Y>
 where
     F: Fn(f64, &Y) -> Y,
     T: RealField + Add<f64, Output = T> + Mul<f64, Output = T> + Into<f64>,
     Y: OdeType<Item = T>,
 {
-    /// after step reduction do not increase step for timeout controlled steps
-    const STEP_TIMEOUT_CNT: usize = 5;
-
     /// convenience method to create a new builder
     /// same as `OdeBuilder::default()`
     pub fn builder() -> OdeBuilder<F, Y> {
@@ -151,30 +148,23 @@ where
         // store for the computed values
         let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
 
-        let tstart = self.tspan[0];
+        let mut t = self.tspan[0];
         let tend = self.tspan[self.tspan.len() - 1];
-        let mut ops = opts.into();
-        let minstep = ops
+        let mut opts = opts.into();
+        let minstep = opts
             .minstep
-            .map_or_else(|| abs(tend - tstart) / 1e18, |step| step.0);
+            .map_or_else(|| abs(tend - t) / 1e18, |step| step.0);
 
-        let maxstep = ops
+        let maxstep = opts
             .maxstep
-            .map_or_else(|| abs(tend - tstart) / 2.5, |step| step.0);
+            .map_or_else(|| abs(tend - t) / 2.5, |step| step.0);
 
-        let reltol = ops.reltol.0;
-        let abstol = ops.abstol.0;
+        let reltol = opts.reltol.0;
+        let abstol = opts.abstol.0;
 
-        let init = self.hinit(
-            &self.y0,
-            tstart,
-            tend,
-            btab.symbol.order().min(),
-            reltol,
-            abstol,
-        )?;
-        let dt = if signum(ops.initstep.0) == init.tdir {
-            ops.initstep.0
+        let init = self.hinit(&self.y0, t, tend, btab.symbol.order().min(), reltol, abstol)?;
+        let mut dt = if signum(opts.initstep.0) == init.tdir {
+            opts.initstep.0
         } else {
             return Err(OdeError::InvalidInitstep);
         };
@@ -183,38 +173,60 @@ where
         let mut timeout = 0usize;
         let order = btab.symbol.order().min();
         let mut diagnostics = Diagnostics::default();
+        let norm = opts.norm.0;
 
+        // TODO filtering if not every point is required
+        let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
+
+        let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
         loop {
             // k0 is just the function call
-            let coeffs = self.calc_coefficients(
-                btab,
-                tstart,
-                CoefficientPoint::new(init.f0.clone(), self.y0.clone()),
-                dt,
-            );
+            let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
 
             let y = &self.y0;
-            let (ytrial, mut yerr) = self.embedded_step(y, &coeffs, tstart, dt, btab)?;
+            let (ytrial, mut yerr) = self.embedded_step(y, &coeffs, t, dt, btab)?;
 
             // check error and find a new step size
 
             let step = self.stepsize_hw92(
-                dt,
-                init.tdir,
-                y,
-                &ytrial,
-                &mut yerr,
-                order,
-                timeout,
-                abstol,
-                reltol,
-                maxstep,
-                PNorm::default(),
+                dt, init.tdir, y, &ytrial, &mut yerr, order, timeout, abstol, reltol, maxstep, norm,
             );
 
             if step.err < 1. {
                 // accept step
                 diagnostics.accepted_steps += 1;
+
+                // TODO
+                let f0 = &coeffs[0].k;
+                let f1 = if btab.is_first_same_as_last() {
+                    coeffs[btab.nstages() - 1].k.clone()
+                } else {
+                    (self.f)(t + dt, &ytrial)
+                };
+                // interpolate onto given output points
+
+                // store at all new times which are < t+dt
+                for t_iter in self.tspan.iter().take_while_ref(|t_iter| {
+                    let tt = init.tdir * **t_iter;
+                    init.tdir * t < tt && tt < init.tdir * (t + dt)
+                }) {
+                    let yout = self.hermite_interp(*t_iter, t, dt, y, &ytrial, f0, &f1);
+                    ys.push(yout);
+                    tspan.push(*t_iter);
+                }
+                // also store every step taken
+                ys.push(ytrial);
+                tspan.push(t + dt);
+
+                coeff.k = f1;
+
+                // Break if this was the last step:
+
+                // Update t to the time at the end of current step:
+                t += dt;
+                dt = step.dt;
+
+                // TODO
             } else if step.dt.abs() > minstep {
                 // minimum step size reached
                 break;
@@ -223,16 +235,6 @@ where
                 diagnostics.rejected_steps += 1;
             }
         }
-        // integration loop
-
-        //        // loop over all stages and k values of the butcher tableau
-        //        for (s, k) in self
-        //            .calc_ks(btab, self.tspan[i], &ys[i], dt)
-        //            .iter()
-        //            .enumerate()
-        //            {
-        //
-        //            }
 
         unimplemented!()
     }
@@ -451,6 +453,7 @@ where
 
     /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
     ///
+    // TODO pass optionmap instead
     pub fn stepsize_hw92(
         &self,
         dt: f64,
@@ -474,7 +477,7 @@ where
                 return StepHW92 {
                     err: 10.,
                     dt: facmin * dt,
-                    timeout_ctn: Self::STEP_TIMEOUT_CNT,
+                    timeout_ctn: *StepTimeout::default(),
                 };
             }
 

@@ -41,6 +41,7 @@ pub struct AdaptiveOptions {
     pub reltol: Reltol,
     pub abstol: Abstol,
     pub norm: Norm,
+    pub step_timeout: StepTimeout,
 }
 
 impl AdaptiveOptions {
@@ -61,6 +62,7 @@ impl From<OdeOptionMap> for AdaptiveOptions {
             reltol: option_val!(ops rm Reltol).unwrap_or_default(),
             abstol: option_val!(ops rm Abstol).unwrap_or_default(),
             norm: option_val!(ops rm Norm).unwrap_or_default(),
+            step_timeout: option_val!(ops rm StepTimeout).unwrap_or_default(),
         }
     }
 }
@@ -75,6 +77,7 @@ impl From<&OdeOptionMap> for AdaptiveOptions {
             reltol: option_val!(ops get Reltol).unwrap_or_default(),
             abstol: option_val!(ops get Abstol).unwrap_or_default(),
             norm: option_val!(ops get Norm).unwrap_or_default(),
+            step_timeout: option_val!(ops get StepTimeout).unwrap_or_default(),
         }
     }
 }
@@ -250,6 +253,7 @@ macro_rules! impl_ode_ops {
             pub maxstep : Option<Maxstep>,
             pub initstep : Option<Initstep>,
             pub norm : Option<Norm>,
+            pub step_timeout : Option<Timeout>,
             $(
                $(#[$fa])*
                #[builder(setter(into))]
@@ -305,7 +309,10 @@ options! {
     (Retries, "Retries") => [usize],
     /// user defined norm for determining the error
     #[derive(Default)]
-    (Norm, "Norm") => [PNorm]
+    (Norm, "Norm") => [PNorm],
+    /// user defined timeout after which step reduction should not
+    /// increase step for timeout controlled steps
+    (StepTimeout, "StepTimeout") => [usize]
 }
 
 impl Default for Reltol {
@@ -317,6 +324,12 @@ impl Default for Reltol {
 impl Default for Abstol {
     fn default() -> Self {
         Abstol(1e-8)
+    }
+}
+
+impl Default for StepTimeout {
+    fn default() -> Self {
+        StepTimeout(5)
     }
 }
 
