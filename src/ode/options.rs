@@ -1,3 +1,4 @@
+use crate::ode::types::PNorm;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -39,6 +40,7 @@ pub struct AdaptiveOptions {
     pub points: Points,
     pub reltol: Reltol,
     pub abstol: Abstol,
+    pub norm: Norm,
 }
 
 impl AdaptiveOptions {
@@ -58,6 +60,7 @@ impl From<OdeOptionMap> for AdaptiveOptions {
             points: option_val!(ops rm Points).unwrap_or_default(),
             reltol: option_val!(ops rm Reltol).unwrap_or_default(),
             abstol: option_val!(ops rm Abstol).unwrap_or_default(),
+            norm: option_val!(ops rm Norm).unwrap_or_default(),
         }
     }
 }
@@ -71,6 +74,7 @@ impl From<&OdeOptionMap> for AdaptiveOptions {
             points: option_val!(ops get Points).unwrap_or_default(),
             reltol: option_val!(ops get Reltol).unwrap_or_default(),
             abstol: option_val!(ops get Abstol).unwrap_or_default(),
+            norm: option_val!(ops get Norm).unwrap_or_default(),
         }
     }
 }
@@ -245,6 +249,7 @@ macro_rules! impl_ode_ops {
             pub minstep : Option<Minstep>,
             pub maxstep : Option<Maxstep>,
             pub initstep : Option<Initstep>,
+            pub norm : Option<Norm>,
             $(
                $(#[$fa])*
                #[builder(setter(into))]
@@ -282,8 +287,6 @@ macro_rules! impl_ode_ops {
 }
 
 options! {
-    /// user defined norm for determining the error
-    (Norm, "Norm") => [f64],
     /// an integration step is accepted if E <= reltol*abs(y)
     (Reltol, "Reltol") => [f64],
     /// an integration step is accepted if E <= abstol
@@ -293,12 +296,16 @@ options! {
     /// maximal integration step
     (Maxstep, "Maxstep") => [f64],
     /// initial integration step
+    #[derive(Default)]
     (Initstep, "Initstep") => [f64],
     /// Sometimes an integration step takes you out of the region where F(t,y) has a valid solution
     /// and F might result in an error.
     /// retries sets a limit to the number of times the solver might try with a smaller step.
-    (Retries, "Retries") => [usize]
-
+    #[derive(Default)]
+    (Retries, "Retries") => [usize],
+    /// user defined norm for determining the error
+    #[derive(Default)]
+    (Norm, "Norm") => [PNorm]
 }
 
 impl Default for Reltol {
@@ -310,18 +317,6 @@ impl Default for Reltol {
 impl Default for Abstol {
     fn default() -> Self {
         Abstol(1e-8)
-    }
-}
-
-impl Default for Initstep {
-    fn default() -> Self {
-        Initstep(0.)
-    }
-}
-
-impl Default for Retries {
-    fn default() -> Self {
-        Retries(0)
     }
 }
 

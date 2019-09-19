@@ -4,11 +4,12 @@ use alga::general::RealField;
 use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::identities::Zero;
 use num_traits::Float;
+use std::fmt;
 use std::iter::FromIterator;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PNorm {
     P(usize),
     InfPos,
@@ -18,6 +19,17 @@ pub enum PNorm {
 impl Default for PNorm {
     fn default() -> Self {
         PNorm::P(2)
+    }
+}
+
+impl fmt::Display for PNorm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "norm(A, p=")?;
+        match self {
+            PNorm::P(p) => write!(f, "{})", p),
+            PNorm::InfPos => write!(f, "Inf)"),
+            PNorm::InfNeg => write!(f, "-Inf)"),
+        }
     }
 }
 
