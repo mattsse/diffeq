@@ -1,4 +1,4 @@
-pub mod increment;
+pub mod coeff;
 pub mod options;
 pub mod problem;
 pub mod runge_kutta;

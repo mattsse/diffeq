@@ -1,5 +1,5 @@
 use crate::error::{Error, OdeError, Result};
-use crate::ode::increment::{CoefficientMap, CoefficientPoint};
+use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
@@ -186,7 +186,7 @@ where
 
         loop {
             // k0 is just the function call
-            let increments = self.calc_coefficients(
+            let coeffs = self.calc_coefficients(
                 btab,
                 tstart,
                 CoefficientPoint::new(init.f0.clone(), self.y0.clone()),
@@ -194,7 +194,7 @@ where
             );
 
             let y = &self.y0;
-            let (ytrial, mut yerr) = self.embedded_step(y, &increments, tstart, dt, btab)?;
+            let (ytrial, mut yerr) = self.embedded_step(y, &coeffs, tstart, dt, btab)?;
 
             // check error and find a new step size
 
@@ -296,7 +296,7 @@ where
     /// ```
     fn calc_error<S: Dim>(
         &self,
-        increments: &CoefficientMap<Y>,
+        coeffs: &CoefficientMap<Y>,
         btab: &ButcherTableau<f64, S>,
         dt: f64,
     ) -> Result<Y, OdeError>
@@ -306,14 +306,14 @@ where
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        assert_eq!(btab.nstages(), increments.len());
+        assert_eq!(btab.nstages(), coeffs.len());
 
         // get copy of the Odetype and ensure default values
-        let mut err = increments[0].k.clone();
+        let mut err = coeffs[0].k.clone();
         err.set_zero();
 
         if let Weights::Adaptive(b) = &btab.b {
-            for (s, k) in increments.ks().enumerate() {
+            for (s, k) in coeffs.ks().enumerate() {
                 // adapt in every dimension
                 for d in 0..err.dof() {
                     // subtract b_1s from b_0s
@@ -336,7 +336,7 @@ where
     }
 
     /// calculates all coefficients values for a given value `yn` at a specific time `t`
-    /// creates an `IncrementMap` with the calculated increments `k` and their
+    /// creates an `CoefficientMap` with the calculated coefficient `k` and their
     /// approximations `y` of size `S`, the number of stages of the butcher tableau
     pub fn calc_coefficients<S: Dim>(
         &self,
@@ -351,17 +351,17 @@ where
             + Allocator<f64, S, S>
             + Allocator<f64, S>,
     {
-        let mut increments = CoefficientMap::with_capacity(btab.nstages());
+        let mut coeffs = CoefficientMap::with_capacity(btab.nstages());
 
-        increments.push(init);
+        coeffs.push(init);
 
         for s in 1..btab.nstages() {
             let tn = t + btab.c[s] * dt;
             // need a fresh y
-            let mut yi = increments[0].y.clone();
+            let mut yi = coeffs[0].y.clone();
 
             // loop over all previous computed ks
-            for k in increments.ks() {
+            for k in coeffs.ks() {
                 // loop over a coefficients in row s
                 for j in 0..btab.nstages() - 1 {
                     let a = btab.a[(s, j)];
@@ -372,16 +372,16 @@ where
                 }
             }
             // compute the next k value
-            increments.push(CoefficientPoint::new((self.f)(tn, &yi), yi));
+            coeffs.push(CoefficientPoint::new((self.f)(tn, &yi), yi));
         }
-        increments
+        coeffs
     }
 
     /// Does one embedded R-K step updating ytrial, yerr and ks.
     pub fn embedded_step<S: Dim>(
         &self,
         yn: &Y,
-        increments: &CoefficientMap<Y>,
+        coeffs: &CoefficientMap<Y>,
         t: f64,
         dt: f64,
         btab: &ButcherTableau<f64, S>,
@@ -400,7 +400,7 @@ where
         let mut yerr = ytrial.clone();
 
         if let Weights::Adaptive(b) = &btab.b {
-            for (s, k) in increments.ks().take(btab.nstages()).enumerate() {
+            for (s, k) in coeffs.ks().take(btab.nstages()).enumerate() {
                 for d in 0..yn.dof() {
                     *ytrial.get_mut(d) += k.get(d) * b[(s, 0)];
                     *yerr.get_mut(d) += k.get(d) * b[(s, 1)];
