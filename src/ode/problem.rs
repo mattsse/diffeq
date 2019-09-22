@@ -145,9 +145,6 @@ where
             return Ok(OdeSolution::default());
         }
 
-        // store for the computed values
-        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
-
         let mut t = self.tspan[0];
         let tend = self.tspan[self.tspan.len() - 1];
         let mut opts = opts.into();
@@ -169,34 +166,40 @@ where
             return Err(OdeError::InvalidInitstep);
         };
 
-        // integration loop
         let mut timeout = 0usize;
         let order = btab.symbol.order().min();
         let mut diagnostics = Diagnostics::default();
         let norm = opts.norm.0;
+        let mut last_step = false;
 
+        // store for the computed values
+        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
         // TODO filtering if not every point is required
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
 
         let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
+
+        ys.push(self.y0.clone());
+        // integration loop
         loop {
             // k0 is just the function call
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
 
-            let y = &self.y0;
-            let (ytrial, mut yerr) = self.embedded_step(y, &coeffs, t, dt, btab)?;
+            let y = ys[ys.len() - 1].clone();
+
+            let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
 
             // check error and find a new step size
-
             let step = self.stepsize_hw92(
-                dt, init.tdir, y, &ytrial, &mut yerr, order, timeout, abstol, reltol, maxstep, norm,
+                dt, init.tdir, &y, &ytrial, &mut yerr, order, timeout, abstol, reltol, maxstep,
+                norm,
             );
+            timeout = step.timeout_ctn;
 
             if step.err < 1. {
                 // accept step
                 diagnostics.accepted_steps += 1;
 
-                // TODO
                 let f0 = &coeffs[0].k;
                 let f1 = if btab.is_first_same_as_last() {
                     coeffs[btab.nstages() - 1].k.clone()
@@ -204,13 +207,14 @@ where
                     (self.f)(t + dt, &ytrial)
                 };
                 // interpolate onto given output points
+                // TODO filtering if specific points where requested
 
                 // store at all new times which are < t+dt
                 for t_iter in self.tspan.iter().take_while_ref(|t_iter| {
                     let tt = init.tdir * **t_iter;
                     init.tdir * t < tt && tt < init.tdir * (t + dt)
                 }) {
-                    let yout = self.hermite_interp(*t_iter, t, dt, y, &ytrial, f0, &f1);
+                    let yout = self.hermite_interp(*t_iter, t, dt, &y, &ytrial, f0, &f1);
                     ys.push(yout);
                     tspan.push(*t_iter);
                 }
@@ -220,23 +224,37 @@ where
 
                 coeff.k = f1;
 
-                // Break if this was the last step:
+                // break if this was the last step
+                if last_step {
+                    break;
+                }
 
-                // Update t to the time at the end of current step:
+                // update t to the time at the end of current step:
                 t += dt;
                 dt = step.dt;
 
-                // TODO
+                // Hit end point exactly if next step within 1% of end
+                if init.tdir * (t + dt + dt / 100.) >= init.tdir * tend {
+                    dt = tend - t;
+                    // next step is the last, if it succeeds
+                    last_step = true;
+                }
             } else if step.dt.abs() > minstep {
                 // minimum step size reached
                 break;
             } else {
                 // redo step with smaller dt
                 diagnostics.rejected_steps += 1;
+                last_step = false;
+                dt = step.dt;
+                timeout = *StepTimeout::default();
             }
         }
 
-        unimplemented!()
+        Ok(OdeSolution {
+            yout: ys,
+            tout: tspan,
+        })
     }
 
     /// solve the problem using the Feuler Butchertableau
@@ -669,31 +687,23 @@ mod tests {
         vec![dx_dt, dy_dt, dz_dt]
     }
 
-    #[test]
-    fn lorenz_attractor_test() {
-        let s1 = lorenz_attractor(0., &vec![0.1, 0.0, 0.0]);
+    fn lorenz_problem() -> OdeProblem<impl Fn(f64, &Vec<f64>) -> Vec<f64>, Vec<f64>> {
+        OdeProblem::builder()
+            .tspan_linspace(0., TF, 100001)
+            .fun(lorenz_attractor)
+            .init(vec![0.1, 0., 0.])
+            .build()
+            .unwrap()
     }
 
     #[test]
     fn ode1_test() {
-        let problem = OdeProblem::builder()
-            .tspan_linspace(0., TF, 100001)
-            .fun(lorenz_attractor)
-            .init(vec![0.1, 0., 0.])
-            .build()
-            .unwrap();
-
-        problem.ode1(&OdeOptionMap::default());
+        lorenz_problem().ode1(&OdeOptionMap::default());
     }
 
     #[test]
     fn hinit_test() {
-        let problem = OdeProblem::builder()
-            .tspan_linspace(0., TF, 100001)
-            .fun(lorenz_attractor)
-            .init(vec![0.1, 0., 0.])
-            .build()
-            .unwrap();
+        let problem = lorenz_problem();
 
         let y0 = vec![0.1, 0., 0.];
 
