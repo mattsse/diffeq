@@ -208,13 +208,9 @@ where
 
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
             println!("calculated coeffs in iter #{}", step_ctn);
-            println!("coeffs: {:?}", coeffs);
             let y = ys[ys.len() - 1].clone();
 
             let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
-
-            println!("ytrial: {:?}", ytrial);
-            println!("yerr: {:?}", yerr);
 
             // check error and find a new step size
             let step = self.stepsize_hw92(
@@ -223,8 +219,13 @@ where
             );
             timeout = step.timeout_ctn;
 
+            println!("step err: {}", step.err);
+            println!("step newdt: {}", step.dt);
+            println!("step timeout: {}", step.timeout_ctn);
+
             println!("calculated stepsize_hw92");
 
+            panic!();
             if step.err < 1. {
                 println!("caccept step");
                 // accept step
@@ -535,9 +536,8 @@ where
 
         let err = xerr.pnorm(PNorm::default()).into();
 
-        let pow = (1 / (order + 1)) as i32;
-
-        let mut new_dt = maxstep.min(facmin.max(err.powi(-1).powi(pow).into()) * tdir * dt);
+        let pow = (1. / (order + 1) as f64);
+        let mut new_dt = maxstep.min(facmin.max((err.powi(-1).powf(pow) * fac).into()) * tdir * dt);
 
         if timeout > 0 {
             new_dt = new_dt.min(dt);
