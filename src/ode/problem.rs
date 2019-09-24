@@ -205,15 +205,16 @@ where
         loop {
             step_ctn += 1;
             println!("computing iter #{}", step_ctn);
-            // k0 is just the function call
+
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
             println!("calculated coeffs in iter #{}", step_ctn);
+            println!("coeffs: {:?}", coeffs);
             let y = ys[ys.len() - 1].clone();
 
             let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
 
-            println!("calculated embedded_step ytrial: {:?}", ytrial);
-            println!("calculated embedded_step yerr: {:?}", yerr);
+            println!("ytrial: {:?}", ytrial);
+            println!("yerr: {:?}", yerr);
 
             // check error and find a new step size
             let step = self.stepsize_hw92(
@@ -450,16 +451,15 @@ where
         let mut yerr = ytrial.clone();
 
         if let Weights::Adaptive(b) = &btab.b {
-            for (s, k) in coeffs.ks().take(btab.nstages()).enumerate() {
+            for (s, k) in coeffs.ks().enumerate() {
                 for d in 0..yn.dof() {
                     *ytrial.get_mut(d) += k.get(d) * b[(s, 0)];
                     *yerr.get_mut(d) += k.get(d) * b[(s, 1)];
                 }
             }
-
             for d in 0..yn.dof() {
-                ytrial.insert(d, yn.get(d) + ytrial.get(d) * dt);
                 yerr.insert(d, (ytrial.get(d) - yerr.get(d)) * dt);
+                ytrial.insert(d, yn.get(d) + (ytrial.get(d) * dt));
             }
 
             Ok((ytrial, yerr))
