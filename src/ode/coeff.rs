@@ -3,6 +3,7 @@ use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::RealField;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 
+#[derive(Debug)]
 pub struct CoefficientMap<Y: OdeType> {
     inner: Vec<CoefficientPoint<Y>>,
 }
@@ -80,7 +81,7 @@ impl<'a, Y: OdeType> Iterator for Ks<'a, Y> {
 
     #[inline]
     fn next(&mut self) -> Option<&'a Y> {
-        self.inner.next().map(|inc| &inc.k)
+        self.inner.next().map(|coeff| &coeff.k)
     }
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -97,7 +98,7 @@ impl<'a, Y: OdeType> Iterator for Ys<'a, Y> {
 
     #[inline]
     fn next(&mut self) -> Option<&'a Y> {
-        self.inner.next().map(|inc| &inc.y)
+        self.inner.next().map(|coeff| &coeff.y)
     }
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {

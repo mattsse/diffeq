@@ -19,6 +19,7 @@ use std::ops::{Add, Mul};
 /// Most solvers will only consider tspan\[0\] and tspan\[end\], and intermediary points will be
 /// interpolated. If tspan\[0\] > tspan\[end\] the integration is performed backwards. The times are
 /// promoted as necessary to a common floating-point type.
+// TODO AsRef<Y> ?
 #[derive(Debug, Clone)]
 pub struct OdeProblem<F, Y>
 where
@@ -117,7 +118,7 @@ where
         OdeBuilder::default()
     }
 
-    pub fn ode45<S: Dim>(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode45(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
     }
 
@@ -160,10 +161,15 @@ where
         let abstol = opts.abstol.0;
 
         let init = self.hinit(&self.y0, t, tend, btab.symbol.order().min(), reltol, abstol)?;
-        let mut dt = if signum(opts.initstep.0) == init.tdir {
-            opts.initstep.0
+
+        let mut dt = if opts.initstep.0 != 0. {
+            if signum(opts.initstep.0) == init.tdir {
+                opts.initstep.0
+            } else {
+                return Err(OdeError::InvalidInitstep);
+            }
         } else {
-            return Err(OdeError::InvalidInitstep);
+            init.h
         };
 
         let mut timeout = 0usize;
@@ -172,22 +178,42 @@ where
         let norm = opts.norm.0;
         let mut last_step = false;
 
-        // store for the computed values
-        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        println!("config");
+        println!("maxstep: {}", maxstep);
+        println!("minstep: {}", minstep);
+        println!("initstep: {}", opts.initstep.0);
+        println!("reltol: {}", reltol);
+        println!("abstol: {}", abstol);
+        println!("dt: {}", dt);
+        println!("tdir: {}", init.tdir);
+        println!("ks[1]: {:?}", init.f0);
+
         // TODO filtering if not every point is required
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
+        tspan.push(t);
+
+        // store for the computed values
+        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
 
         let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
 
         ys.push(self.y0.clone());
+        println!("starting integration loop...");
+
+        let mut step_ctn = 0usize;
         // integration loop
         loop {
+            step_ctn += 1;
+            println!("computing iter #{}", step_ctn);
             // k0 is just the function call
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
-
+            println!("calculated coeffs in iter #{}", step_ctn);
             let y = ys[ys.len() - 1].clone();
 
             let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
+
+            println!("calculated embedded_step ytrial: {:?}", ytrial);
+            println!("calculated embedded_step yerr: {:?}", yerr);
 
             // check error and find a new step size
             let step = self.stepsize_hw92(
@@ -196,7 +222,10 @@ where
             );
             timeout = step.timeout_ctn;
 
+            println!("calculated stepsize_hw92");
+
             if step.err < 1. {
+                println!("caccept step");
                 // accept step
                 diagnostics.accepted_steps += 1;
 
@@ -240,15 +269,18 @@ where
                     last_step = true;
                 }
             } else if step.dt.abs() > minstep {
+                println!("minimum reached");
                 // minimum step size reached
                 break;
             } else {
+                println!("redo step");
                 // redo step with smaller dt
                 diagnostics.rejected_steps += 1;
                 last_step = false;
                 dt = step.dt;
                 timeout = *StepTimeout::default();
             }
+            println!();
         }
 
         Ok(OdeSolution {
@@ -258,7 +290,7 @@ where
     }
 
     /// solve the problem using the Feuler Butchertableau
-    pub fn ode1(self, ops: &OdeOptionMap) -> OdeSolution<f64, Y> {
+    pub fn ode1(self) -> OdeSolution<f64, Y> {
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
@@ -375,25 +407,23 @@ where
 
         coeffs.push(init);
 
-        for s in 1..btab.nstages() {
-            let tn = t + btab.c[s] * dt;
-            // need a fresh y
+        // a coeffs in first row are zero
+        for row in 1..btab.nstages() {
+            // need a fresh y clone
             let mut yi = coeffs[0].y.clone();
 
-            // loop over all previous computed ks
-            for k in coeffs.ks() {
-                // loop over a coefficients in row s
-                for j in 0..btab.nstages() - 1 {
-                    let a = btab.a[(s, j)];
-                    // adapt in all dimensions
-                    for d in 0..yi.dof() {
-                        *yi.get_mut(d) += k.get(d) * dt * a;
-                    }
+            for (col, k) in coeffs.ks().enumerate() {
+                // adapt in all dimensions
+                for d in 0..yi.dof() {
+                    *yi.get_mut(d) += k.get(d) * (btab.a[(row, col)] * dt);
                 }
             }
+
+            let tn = t + btab.c[row] * dt;
             // compute the next k value
             coeffs.push(CoefficientPoint::new((self.f)(tn, &yi), yi));
         }
+
         coeffs
     }
 
@@ -472,6 +502,7 @@ where
     /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
     ///
     // TODO pass optionmap instead
+    // TOOD pass xerr by value and return it
     pub fn stepsize_hw92(
         &self,
         dt: f64,
@@ -698,7 +729,14 @@ mod tests {
 
     #[test]
     fn ode1_test() {
-        lorenz_problem().ode1(&OdeOptionMap::default());
+        lorenz_problem().ode1();
+    }
+
+    #[test]
+    fn ode45_test() {
+        let solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
+
+        println!("solution {:?}", solution);
     }
 
     #[test]
