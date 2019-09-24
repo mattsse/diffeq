@@ -2,7 +2,7 @@ use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
 use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
 use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN, U1, U2};
-use num_traits::identities::Zero;
+use num_traits::identities::{One, Zero};
 use num_traits::Float;
 use std::fmt;
 use std::iter::FromIterator;
@@ -68,7 +68,6 @@ pub trait OdeType: Clone + std::fmt::Debug {
     // page 169 a)
     /// compute the p-norm of the OdeIterable
     fn pnorm(&self, p: PNorm) -> Self::Item {
-        // TODO if Inf use fold(max(abs))
         match p {
             PNorm::InfPos => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
                 let abs = item.abs();
@@ -86,10 +85,12 @@ pub trait OdeType: Clone + std::fmt::Debug {
                     norm
                 }
             }),
-            // TODO add final pow(1/p)
-            PNorm::P(p) => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
-                norm + item.abs().powi(p as i32)
-            }),
+            PNorm::P(p) => self
+                .ode_iter()
+                .fold(Self::Item::zero(), |norm, item| {
+                    norm + item.abs().powi(p as i32)
+                })
+                .powf(Self::Item::one() * (1. / p as f64)),
         }
     }
 }
