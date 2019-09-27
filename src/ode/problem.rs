@@ -116,8 +116,28 @@ where
         OdeBuilder::default()
     }
 
+    pub fn ode21(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderk_adapt(&ButcherTableau::rk21(), opts)
+    }
+
+    pub fn ode23(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderk_adapt(&ButcherTableau::rk23(), opts)
+    }
+
     pub fn ode45(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.ode45_dp(opts)
+    }
+
+    pub fn ode45_dp(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderk_adapt(&ButcherTableau::dopri5(), opts)
+    }
+
+    pub fn ode45_fe(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
+    }
+
+    pub fn ode78(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderk_adapt(&ButcherTableau::feh78(), opts)
     }
 
     /// solve with adaptive Runge-Kutta methods
