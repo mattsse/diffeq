@@ -18,7 +18,6 @@ use std::ops::{Add, Mul};
 /// Most solvers will only consider tspan\[0\] and tspan\[end\], and intermediary points will be
 /// interpolated. If tspan\[0\] > tspan\[end\] the integration is performed backwards. The times are
 /// promoted as necessary to a common floating-point type.
-// TODO AsRef<Y> ?
 #[derive(Debug, Clone)]
 pub struct OdeProblem<F, Y>
 where
