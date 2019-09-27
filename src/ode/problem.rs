@@ -426,7 +426,7 @@ where
     }
 
     /// Does one embedded R-K step updating ytrial, yerr and ks.
-    pub fn embedded_step<S: Dim>(
+    fn embedded_step<S: Dim>(
         &self,
         yn: &Y,
         coeffs: &CoefficientMap<Y>,
@@ -471,16 +471,7 @@ where
     /// For dense output see Hairer & Wanner p.190 using Hermite
     ///  interpolation. Updates y in-place.
     /// f_0 = f(x_0 , y_0) , f_1 = f(x_0 + h, y_1 )
-    pub fn hermite_interp(
-        &self,
-        tquery: f64,
-        t: f64,
-        dt: f64,
-        y0: &Y,
-        y1: &Y,
-        f0: &Y,
-        f1: &Y,
-    ) -> Y {
+    fn hermite_interp(&self, tquery: f64, t: f64, dt: f64, y0: &Y, y1: &Y, f0: &Y, f1: &Y) -> Y {
         let mut y = y0.clone();
         let theta = (tquery - t) / dt;
 
@@ -501,7 +492,7 @@ where
     ///
     // TODO pass optionmap instead
     // TOOD pass xerr by value and return it
-    pub fn stepsize_hw92(
+    fn stepsize_hw92(
         &self,
         dt: f64,
         tdir: f64,
@@ -551,9 +542,8 @@ where
     /// estimator for initial step based on book
     /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
     /// Returns first step, direction of integration and F evaluated at t0
-    // TODO rm pub
     // TODO t0 and tend can prbly be removed as parameter
-    pub fn hinit(
+    fn hinit(
         &self,
         x0: &Y,
         t0: f64,
@@ -618,7 +608,6 @@ pub struct InitialHint<Y> {
 
 #[derive(Debug)]
 pub struct StepHW92 {
-    // TODO change to T RealField?
     err: f64,
     dt: f64,
     timeout_ctn: usize,
@@ -732,15 +721,6 @@ mod tests {
     #[test]
     fn ode45_test() {
         let solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
-    }
-
-    #[test]
-    fn hinit_test() {
-        let problem = lorenz_problem();
-
-        let y0 = vec![0.1, 0., 0.];
-
-        let init = problem.hinit(&y0, 0.0, 100., 4, 1e-5 as f64, 1e-8 as f64);
     }
 
     #[test]
