@@ -4,7 +4,6 @@ use crate::ode::options::{AdaptiveOptions, OdeOptionMap, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::{RealField, SupersetOf};
-use itertools::Itertools;
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
@@ -178,16 +177,6 @@ where
         let norm = opts.norm.0;
         let mut last_step = false;
 
-        println!("config");
-        println!("maxstep: {}", maxstep);
-        println!("minstep: {}", minstep);
-        println!("initstep: {}", opts.initstep.0);
-        println!("reltol: {}", reltol);
-        println!("abstol: {}", abstol);
-        println!("dt: {}", dt);
-        println!("tdir: {}", init.tdir);
-        println!("ks[1]: {:?}", init.f0);
-
         // TODO filtering if not every point is required
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
         tspan.push(t);
@@ -198,16 +187,10 @@ where
         let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
 
         ys.push(self.y0.clone());
-        println!("starting integration loop...");
-
-        let mut step_ctn = 0usize;
+        let mut iter_fixed = 1usize;
         // integration loop
         loop {
-            step_ctn += 1;
-            println!("computing iter #{}", step_ctn);
-
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
-            println!("calculated coeffs in iter #{}", step_ctn);
             let y = ys[ys.len() - 1].clone();
 
             let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
@@ -219,15 +202,7 @@ where
             );
             timeout = step.timeout_ctn;
 
-            println!("step err: {}", step.err);
-            println!("step newdt: {}", step.dt);
-            println!("step timeout: {}", step.timeout_ctn);
-
-            println!("calculated stepsize_hw92");
-
-            panic!();
             if step.err < 1. {
-                println!("caccept step");
                 // accept step
                 diagnostics.accepted_steps += 1;
 
@@ -237,22 +212,27 @@ where
                 } else {
                     (self.f)(t + dt, &ytrial)
                 };
+
                 // interpolate onto given output points
                 // TODO filtering if specific points where requested
 
                 // store at all new times which are < t+dt
-                for t_iter in self.tspan.iter().take_while_ref(|t_iter| {
-                    let tt = init.tdir * **t_iter;
-                    init.tdir * t < tt && tt < init.tdir * (t + dt)
-                }) {
-                    let yout = self.hermite_interp(*t_iter, t, dt, &y, &ytrial, f0, &f1);
+                while iter_fixed < self.tspan.len()
+                    && init.tdir * t < init.tdir * self.tspan[iter_fixed]
+                    && init.tdir * self.tspan[iter_fixed] < init.tdir * (t + dt)
+                {
+                    let yout =
+                        self.hermite_interp(self.tspan[iter_fixed], t, dt, &y, &ytrial, f0, &f1);
                     ys.push(yout);
-                    tspan.push(*t_iter);
+                    tspan.push(self.tspan[iter_fixed]);
+                    iter_fixed += 1;
                 }
+
                 // also store every step taken
-                ys.push(ytrial);
+                ys.push(ytrial.clone());
                 tspan.push(t + dt);
 
+                coeff.y = ytrial;
                 coeff.k = f1;
 
                 // break if this was the last step
@@ -270,19 +250,16 @@ where
                     // next step is the last, if it succeeds
                     last_step = true;
                 }
-            } else if step.dt.abs() > minstep {
-                println!("minimum reached");
+            } else if step.dt.abs() < minstep {
                 // minimum step size reached
                 break;
             } else {
-                println!("redo step");
                 // redo step with smaller dt
                 diagnostics.rejected_steps += 1;
                 last_step = false;
                 dt = step.dt;
                 timeout = *StepTimeout::default();
             }
-            println!();
         }
 
         Ok(OdeSolution {
@@ -489,12 +466,13 @@ where
         let theta = (tquery - t) / dt;
 
         for i in 0..y0.dof() {
-            let val = (y0.get(i) * (1. - theta)
-                + y1.get(i) * theta
-                + (y1.get(i) - y0.get(i))
+            let val = ((y0.get(i) * (1. - theta) + y1.get(i) * theta)
+                + ((y1.get(i) - y0.get(i)) * (1. - 2. * theta)
+                    + f0.get(i) * (theta - 1.) * dt
+                    + f1.get(i) * theta * dt)
                     * theta
-                    * (theta - 1.)
-                    * (f0.get(i) * (theta - 1.) * dt + f1.get(i) * theta * dt + (1. - 2. * theta)));
+                    * (theta - 1.));
+
             y.insert(i, val);
         }
         y
@@ -735,8 +713,6 @@ mod tests {
     #[test]
     fn ode45_test() {
         let solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
-
-        println!("solution {:?}", solution);
     }
 
     #[test]

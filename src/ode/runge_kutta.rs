@@ -836,7 +836,6 @@ mod tests {
     #[test]
     fn is_fsal() {
         assert!(!ButcherTableau::midpoint().is_first_same_as_last());
-        println!("{}", ButcherTableau::dopri5());
         assert!(ButcherTableau::dopri5().is_first_same_as_last());
     }
 }
