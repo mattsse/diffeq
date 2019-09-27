@@ -212,12 +212,11 @@ where
             let coeffs = self.calc_coefficients(btab, t, coeff.clone(), dt);
             let y = ys[ys.len() - 1].clone();
 
-            let (ytrial, mut yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
+            let (ytrial, yerr) = self.embedded_step(&y, &coeffs, t, dt, btab)?;
 
             // check error and find a new step size
             let step = self.stepsize_hw92(
-                dt, init.tdir, &y, &ytrial, &mut yerr, order, timeout, abstol, reltol, maxstep,
-                norm,
+                dt, init.tdir, &y, &ytrial, yerr, order, timeout, abstol, reltol, maxstep, norm,
             );
             timeout = step.timeout_ctn;
 
@@ -251,8 +250,7 @@ where
                 ys.push(ytrial.clone());
                 tspan.push(t + dt);
 
-                coeff.y = ytrial;
-                coeff.k = f1;
+                coeff = CoefficientPoint::new(f1, ytrial);
 
                 // break if this was the last step
                 if last_step {
@@ -292,7 +290,6 @@ where
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
-    // TODO should this return an error on f64::NAN? how for `Realfield`?
     // TODO is providing an optionmap beneficial?
     fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
     where
@@ -498,7 +495,7 @@ where
         tdir: f64,
         x0: &Y,
         xtrial: &Y,
-        xerr: &mut Y,
+        mut xerr: Y,
         order: usize,
         mut timeout: usize,
         abstol: f64,
@@ -542,7 +539,6 @@ where
     /// estimator for initial step based on book
     /// "Solving Ordinary Differential Equations I" by Hairer et al., p.169
     /// Returns first step, direction of integration and F evaluated at t0
-    // TODO t0 and tend can prbly be removed as parameter
     fn hinit(
         &self,
         x0: &Y,
@@ -583,10 +579,10 @@ where
         }
         let d2 = f1_0.pnorm(PNorm::InfPos) / (tau * h0);
 
-        let h1: f64 = if d1.max(d2) < one * 1e-15 {
-            1.0e-6.max(1.0e-3 * h0)
+        let h1: f64 = if d1.max(d2) < one * 1e-15f64 {
+            1.0e-6f64.max(1.0e-3f64 * h0)
         } else {
-            let pow = -(2. + d1.max(d2).log10().into()) / (order as f64 + 1.);
+            let pow = -(2. + d1.max(d2).log10().into()) / ((order + 1) as f64);
             10f64.powf(pow)
         };
 
