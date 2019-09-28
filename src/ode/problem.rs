@@ -2,6 +2,7 @@ use crate::error::{Error, OdeError, Result};
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOp, OdeOptionMap, Points, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
+use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::{RealField, SupersetOf};
 use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
@@ -641,54 +642,6 @@ impl fmt::Display for Diagnostics {
         writeln!(f, "Number of function evaluations: {}", self.num_eval)?;
         writeln!(f, "Number of accepted steps: {}", self.accepted_steps)?;
         write!(f, "Number of rejected steps: {}", self.rejected_steps)
-    }
-}
-
-// TODO rm `T`, use f64 instead
-#[derive(Debug)]
-pub struct OdeSolution<T: RealField, Y: OdeType> {
-    /// Vector of points at which solutions were obtained
-    tout: Vec<T>,
-    /// solutions at times `tout`, stored as a vector `yout`
-    yout: Vec<Y>,
-}
-
-impl<T: RealField, Y: OdeType> Default for OdeSolution<T, Y> {
-    fn default() -> Self {
-        OdeSolution {
-            tout: Vec::new(),
-            yout: Vec::new(),
-        }
-    }
-}
-
-impl<T: RealField, Y: OdeType> fmt::Display for OdeSolution<T, Y> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(")?;
-
-        fn slice_print<T: fmt::Debug>(f: &mut fmt::Formatter, items: &[T]) -> fmt::Result {
-            write!(f, "[")?;
-            let mut i = 0;
-            while i < items.len() {
-                if i == items.len() - 1 {
-                    write!(f, "{:?}", items[i])?;
-                } else {
-                    write!(f, "{:?}, ", items[i])?;
-                }
-                if i > 8 && i < items.len() - 10 {
-                    write!(f, "... ")?;
-                    i = items.len() - 11;
-                }
-                i += 1;
-            }
-            write!(f, "]")
-        }
-
-        slice_print(f, &self.tout)?;
-        write!(f, ", Vec{{{}}}", self.yout.len())?;
-        slice_print(f, &self.yout)?;
-
-        write!(f, ")")
     }
 }
 
