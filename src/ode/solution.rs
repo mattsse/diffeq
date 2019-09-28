@@ -2,6 +2,20 @@ use crate::ode::types::OdeType;
 use alga::general::RealField;
 use std::fmt;
 
+/// pairs the timestamp with the corresponding calculated value`
+#[derive(Debug, Clone)]
+pub struct SolutionPoint<Y: OdeType, T: RealField = f64> {
+    pub t: T,
+    pub y: Y,
+}
+
+impl<Y: OdeType, T: RealField> SolutionPoint<Y, T> {
+    #[inline]
+    pub fn new(t: T, y: Y) -> Self {
+        Self { t, y }
+    }
+}
+
 // TODO rm `T`, use f64 instead
 #[derive(Debug)]
 pub struct OdeSolution<T: RealField, Y: OdeType> {
