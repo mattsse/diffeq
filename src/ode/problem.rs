@@ -143,7 +143,7 @@ where
     /// solve with adaptive Runge-Kutta methods
     fn oderk_adapt<S: Dim, Ops: Into<AdaptiveOptions>>(
         &self,
-        btab: &ButcherTableau<f64, S>,
+        btab: &ButcherTableau<S>,
         opts: Ops,
     ) -> Result<OdeSolution<f64, Y>, OdeError>
     where
@@ -291,7 +291,7 @@ where
     }
 
     // TODO is providing an optionmap beneficial?
-    fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<f64, S>) -> OdeSolution<f64, Y>
+    fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
             + Allocator<f64, S, U2>
@@ -344,7 +344,7 @@ where
     fn calc_error<S: Dim>(
         &self,
         coeffs: &CoefficientMap<Y>,
-        btab: &ButcherTableau<f64, S>,
+        btab: &ButcherTableau<S>,
         dt: f64,
     ) -> Result<Y, OdeError>
     where
@@ -387,7 +387,7 @@ where
     /// approximations `y` of size `S`, the number of stages of the butcher tableau
     pub fn calc_coefficients<S: Dim>(
         &self,
-        btab: &ButcherTableau<f64, S>,
+        btab: &ButcherTableau<S>,
         t: f64,
         init: CoefficientPoint<Y>,
         dt: f64,
@@ -429,7 +429,7 @@ where
         coeffs: &CoefficientMap<Y>,
         t: f64,
         dt: f64,
-        btab: &ButcherTableau<f64, S>,
+        btab: &ButcherTableau<S>,
     ) -> Result<(Y, Y), OdeError>
     where
         DefaultAllocator: Allocator<f64, U1, S>

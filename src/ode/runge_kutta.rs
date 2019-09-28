@@ -85,7 +85,7 @@ impl RKOrder {
 /// where `T` is the type of the coefficients
 /// and `S` is the number of stages (an int)
 #[derive(Debug, Clone)]
-pub struct ButcherTableau<T: RealField, S: Dim>
+pub struct ButcherTableau<S: Dim, T: RealField = f64>
 where
     DefaultAllocator:
         Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
@@ -95,7 +95,7 @@ where
     /// coefficients - rk matrix
     pub a: MatrixN<T, S>,
     /// weights, adaptive weights are column major, means 2 fixed columns and `S` rows
-    pub b: Weights<T, S>,
+    pub b: Weights<S, T>,
     /// nodes
     pub c: VectorN<T, S>,
 }
@@ -107,7 +107,7 @@ pub enum WeightType {
 }
 
 #[derive(Debug, Clone)]
-pub enum Weights<N: RealField, S: Dim>
+pub enum Weights<S: Dim, N: RealField = f64>
 where
     DefaultAllocator: Allocator<N, S> + Allocator<N, S, U2>,
 {
@@ -118,7 +118,7 @@ where
     Adaptive(MatrixMN<N, S, U2>),
 }
 
-impl<N: RealField, S: Dim> Weights<N, S>
+impl<S: Dim, N: RealField> Weights<S, N>
 where
     DefaultAllocator: Allocator<N, S> + Allocator<N, S, U2>,
 {
@@ -131,7 +131,7 @@ where
 }
 
 /// https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
-impl<T: RealField, S: Dim> ButcherTableau<T, S>
+impl<S: Dim, T: RealField> ButcherTableau<S, T>
 where
     DefaultAllocator:
         Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
@@ -198,7 +198,7 @@ where
     }
 }
 
-impl<T: RealField, S: Dim> fmt::Display for ButcherTableau<T, S>
+impl<S: Dim, T: RealField> fmt::Display for ButcherTableau<S, T>
 where
     DefaultAllocator:
         Allocator<T, U1, S> + Allocator<T, S, U2> + Allocator<T, S, S> + Allocator<T, S>,
@@ -233,7 +233,7 @@ where
     }
 }
 
-impl ButcherTableau<f64, U1> {
+impl ButcherTableau<U1> {
     /// constructs the Butcher Tableau for the (forward) Euler method
     /// ```text
     ///   0.000 | 0.000
@@ -254,7 +254,7 @@ impl ButcherTableau<f64, U1> {
     }
 }
 
-impl ButcherTableau<f64, U2> {
+impl ButcherTableau<U2> {
     /// the midpoint method https://en.wikipedia.org/wiki/Midpoint_method
     ///
     /// ```text
@@ -310,7 +310,7 @@ impl ButcherTableau<f64, U2> {
     }
 }
 
-impl ButcherTableau<f64, U4> {
+impl ButcherTableau<U4> {
     /// ```text
     ///  0.000 | 0.000 0.000 0.000 0.000
     ///  0.500 | 0.500 0.000 0.000 0.000
@@ -361,7 +361,7 @@ impl ButcherTableau<f64, U4> {
     }
 }
 
-impl ButcherTableau<f64, U4> {
+impl ButcherTableau<U4> {
     /// constructs the Butcher Tableau for the Runge Kutta 4 method
     /// ```text
     ///    0.000 | 0.000 0.000 0.000 0.000
@@ -387,7 +387,7 @@ impl ButcherTableau<f64, U4> {
     }
 }
 
-impl ButcherTableau<f64, U6> {
+impl ButcherTableau<U6> {
     /// Fehlberg https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
     /// Order of 4 with an error estimator of order 5
     ///
@@ -466,7 +466,7 @@ impl ButcherTableau<f64, U6> {
         }
     }
 }
-impl ButcherTableau<f64, U7> {
+impl ButcherTableau<U7> {
     /// ```text
     ///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000
     ///  0.200 | 0.200 0.000 0.000 0.000 0.000 0.000 0.000
@@ -566,7 +566,7 @@ impl ButcherTableau<f64, U7> {
     }
 }
 
-impl ButcherTableau<f64, U13> {
+impl ButcherTableau<U13> {
     ///  0.000 | 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
     ///  0.074 | 0.074 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
     ///  0.111 | 0.028 0.083 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000
