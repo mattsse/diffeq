@@ -487,8 +487,6 @@ where
 
     /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
     ///
-    // TODO pass optionmap instead
-    // TOOD pass xerr by value and return it
     fn stepsize_hw92(
         &self,
         dt: f64,
