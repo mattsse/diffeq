@@ -91,14 +91,14 @@ pub trait OdeOp {
     fn option_name() -> &'static str;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Points {
     /// output is given for each value in `tspan`,
     /// as well as for each intermediate point the solver used
     All,
-    /// output is given only for each value in `tspan`.
-    /// where the inner vector contains the indexes of the requested `tspan` values
-    Specified(Vec<usize>),
+    /// output is given only for the supplied time stamps,
+    /// without additional calculated time stamps
+    Specified,
 }
 
 impl OdeOp for Points {
@@ -119,11 +119,7 @@ impl fmt::Display for Points {
         write!(f, "Points: ")?;
         match self {
             Points::All => write!(f, "All"),
-            Points::Specified(idx) => {
-                write!(f, "[")?;
-                fmt_comma_delimited(f, idx)?;
-                write!(f, "]")
-            }
+            Points::Specified => write!(f, "Specified"),
         }
     }
 }
