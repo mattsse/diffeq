@@ -1,6 +1,6 @@
 use crate::error::{Error, OdeError, Result};
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
-use crate::ode::options::{AdaptiveOptions, OdeOptionMap, StepTimeout};
+use crate::ode::options::{AdaptiveOptions, OdeOp, OdeOptionMap, Points, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
 use alga::general::{RealField, SupersetOf};
@@ -196,12 +196,11 @@ where
         let norm = opts.norm.0;
         let mut last_step = false;
 
-        // TODO filtering if not every point is required
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
         tspan.push(t);
 
         // store for the computed values
-        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        let mut ys = Vec::with_capacity(self.tspan.len());
 
         let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
 
@@ -232,23 +231,46 @@ where
                 };
 
                 // interpolate onto given output points
-                // TODO filtering if specific points where requested
-
-                // store at all new times which are < t+dt
-                while iter_fixed < self.tspan.len()
-                    && init.tdir * t < init.tdir * self.tspan[iter_fixed]
-                    && init.tdir * self.tspan[iter_fixed] < init.tdir * (t + dt)
-                {
-                    let yout =
-                        self.hermite_interp(self.tspan[iter_fixed], t, dt, &y, &ytrial, f0, &f1);
-                    ys.push(yout);
-                    tspan.push(self.tspan[iter_fixed]);
-                    iter_fixed += 1;
+                if Points::Specified == opts.points {
+                    while iter_fixed < self.tspan.len()
+                        && (init.tdir * self.tspan[iter_fixed] < init.tdir * (t + dt) || last_step)
+                    {
+                        let yout = self.hermite_interp(
+                            self.tspan[iter_fixed],
+                            t,
+                            dt,
+                            &y,
+                            &ytrial,
+                            f0,
+                            &f1,
+                        );
+                        ys.push(yout);
+                        tspan.push(self.tspan[iter_fixed]);
+                        iter_fixed += 1;
+                    }
+                } else {
+                    // store at all new times which are < t+dt
+                    while iter_fixed < self.tspan.len()
+                        && init.tdir * t < init.tdir * self.tspan[iter_fixed]
+                        && init.tdir * self.tspan[iter_fixed] < init.tdir * (t + dt)
+                    {
+                        let yout = self.hermite_interp(
+                            self.tspan[iter_fixed],
+                            t,
+                            dt,
+                            &y,
+                            &ytrial,
+                            f0,
+                            &f1,
+                        );
+                        ys.push(yout);
+                        tspan.push(self.tspan[iter_fixed]);
+                        iter_fixed += 1;
+                    }
+                    // also store every step taken
+                    ys.push(ytrial.clone());
+                    tspan.push(t + dt);
                 }
-
-                // also store every step taken
-                ys.push(ytrial.clone());
-                tspan.push(t + dt);
 
                 coeff = CoefficientPoint::new(f1, ytrial);
 
@@ -290,7 +312,6 @@ where
         self.oderk_fixed(&ButcherTableau::feuler())
     }
 
-    // TODO is providing an optionmap beneficial?
     fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
@@ -700,7 +721,7 @@ mod tests {
 
     fn lorenz_problem() -> OdeProblem<impl Fn(f64, &Vec<f64>) -> Vec<f64>, Vec<f64>> {
         OdeProblem::builder()
-            .tspan_linspace(0., TF, 100001)
+            .tspan_linspace(0., TF, 100_001)
             .fun(lorenz_attractor)
             .init(vec![0.1, 0., 0.])
             .build()
@@ -714,6 +735,8 @@ mod tests {
 
     #[test]
     fn ode45_test() {
+        let mut ops = OdeOptionMap::default();
+        ops.insert(Points::option_name(), Points::Specified.into());
         let solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
     }
 
