@@ -3,12 +3,11 @@ use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOp, OdeOptionMap, Points, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
-use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
-use alga::general::{RealField, SupersetOf};
-use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
+use crate::ode::types::{OdeType, PNorm};
+use alga::general::RealField;
+use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
-use std::iter::FromIterator;
 use std::ops::{Add, Mul};
 
 /// F: the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t)
@@ -76,7 +75,7 @@ where
 
     /// creates a new OdeProblem
     /// returns an error if any field is None
-    fn build(self) -> Result<OdeProblem<F, Y>> {
+    pub fn build(self) -> Result<OdeProblem<F, Y>> {
         let f = self
             .f
             .ok_or(Error::uninitialized("Required problem must be initialized"))?;
@@ -167,7 +166,7 @@ where
 
         let mut t = self.tspan[0];
         let tend = self.tspan[self.tspan.len() - 1];
-        let mut opts = opts.into();
+        let opts = opts.into();
         let minstep = opts
             .minstep
             .map_or_else(|| abs(tend - t) / 1e18, |step| step.0);
@@ -449,7 +448,7 @@ where
         &self,
         yn: &Y,
         coeffs: &CoefficientMap<Y>,
-        t: f64,
+        _t: f64,
         dt: f64,
         btab: &ButcherTableau<S>,
     ) -> Result<(Y, Y), OdeError>
@@ -495,12 +494,12 @@ where
         let theta = (tquery - t) / dt;
 
         for i in 0..y0.dof() {
-            let val = ((y0.get(i) * (1. - theta) + y1.get(i) * theta)
+            let val = (y0.get(i) * (1. - theta) + y1.get(i) * theta)
                 + ((y1.get(i) - y0.get(i)) * (1. - 2. * theta)
                     + f0.get(i) * (theta - 1.) * dt
                     + f1.get(i) * theta * dt)
                     * theta
-                    * (theta - 1.));
+                    * (theta - 1.);
 
             y.insert(i, val);
         }
@@ -521,10 +520,10 @@ where
         abstol: f64,
         reltol: f64,
         maxstep: f64,
-        norm: PNorm,
+        _norm: PNorm,
     ) -> StepHW92 {
         let fac = 0.8;
-        let facmax = 5.;
+        let _facmax = 5.;
         let facmin = 0.2;
 
         for d in 0..x0.dof() {
@@ -536,12 +535,12 @@ where
                 };
             }
 
-            *xerr.get_mut(d) /= (x0.get(d).norm1().max(xtrial.get(d).norm1()) * reltol + abstol);
+            *xerr.get_mut(d) /= x0.get(d).norm1().max(xtrial.get(d).norm1()) * reltol + abstol;
         }
 
         let err = xerr.pnorm(PNorm::default()).into();
 
-        let pow = (1. / (order + 1) as f64);
+        let pow = 1. / (order + 1) as f64;
         let mut new_dt = maxstep.min(facmin.max((err.powi(-1).powf(pow) * fac).into()) * tdir * dt);
 
         if timeout > 0 {
@@ -589,7 +588,7 @@ where
         // perform Euler step, in every dimension
         let mut x1 = x0.clone();
         for d in 0..x1.dof() {
-            *x1.get_mut(d) += (f0.get(d) * h0 * tdir);
+            *x1.get_mut(d) += f0.get(d) * h0 * tdir;
         }
         let f1 = (self.f)(t0 + tdir * h0, &x1);
         // estimate second derivative
@@ -660,7 +659,7 @@ mod tests {
     const RHO: f64 = 28.0;
     const BET: f64 = 8.0 / 3.0;
 
-    fn lorenz_attractor(t: f64, v: &Vec<f64>) -> Vec<f64> {
+    fn lorenz_attractor(_t: f64, v: &Vec<f64>) -> Vec<f64> {
         let (x, y, z) = (v[0], v[1], v[2]);
 
         // Lorenz equations
@@ -690,7 +689,7 @@ mod tests {
     fn ode45_test() {
         let mut ops = OdeOptionMap::default();
         ops.insert(Points::option_name(), Points::Specified.into());
-        let solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
+        let _solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
     }
 
     #[test]

@@ -1,13 +1,9 @@
-use crate::ode::options::{AdaptiveOptions, OdeOptionMap};
-use crate::ode::runge_kutta::ButcherTableau;
 use alga::general::RealField;
-use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN, U1, U2};
+use na::{allocator::Allocator, ComplexField, DefaultAllocator, Dim, VectorN};
 use num_traits::identities::{One, Zero};
-use num_traits::Float;
 use std::fmt;
-use std::iter::FromIterator;
-use std::ops::{Add, Index, IndexMut, Mul};
-use std::str::FromStr;
+
+use std::ops::{Add, Mul};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PNorm {
@@ -177,17 +173,17 @@ macro_rules! impl_ode_ty {
             }
 
             #[inline]
-            fn get(&self, index: usize) -> Self::Item {
+            fn get(&self, _index: usize) -> Self::Item {
                 *self
             }
 
             #[inline]
-            fn get_mut(&mut self, index: usize) -> &mut Self::Item {
+            fn get_mut(&mut self, _index: usize) -> &mut Self::Item {
                 self
             }
 
             #[inline]
-            fn insert(&mut self, index: usize, item: Self::Item) {
+            fn insert(&mut self, _index: usize, item: Self::Item) {
                 *self = item;
             }
         })*
@@ -255,7 +251,6 @@ impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64, f64) => 9;f64;0,1,2,3,
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn pnorm() {}

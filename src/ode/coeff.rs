@@ -1,7 +1,4 @@
-use crate::ode::runge_kutta::ButcherTableau;
-use crate::ode::types::{OdeType, OdeTypeIterator, PNorm};
-use alga::general::RealField;
-use na::{allocator::Allocator, DefaultAllocator, Dim, VectorN, U1, U2};
+use crate::ode::types::OdeType;
 
 #[derive(Debug)]
 pub struct CoefficientMap<Y: OdeType> {

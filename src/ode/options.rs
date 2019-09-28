@@ -1,11 +1,7 @@
+//#![allow(unused)]
 use crate::ode::types::PNorm;
 use std::collections::HashMap;
 use std::fmt;
-
-// http://docs.juliadiffeq.org/latest/basics/common_solver_opts.html
-// http://docs.juliadiffeq.org/latest/basics/compatibility_chart.html#Solver-Compatibility-Chart-1
-
-// matlab: https://www.mathworks.com/help/matlab/math/summary-of-ode-options.html
 
 pub type OdeOptionMap = HashMap<&'static str, OdeOption>;
 
@@ -152,11 +148,6 @@ macro_rules! options {
     };
 }
 
-macro_rules! opt_val {
-    ([$value:ty]) => {$value};
-    (($item:ty)) => {Vec<$item>};
-}
-
 macro_rules! option {
     // Single value option
     ($(#[$a:meta])*($id:ident, $n:expr) => [$value:ty]) => {
@@ -234,74 +225,6 @@ macro_rules! __ode__deref {
             fn deref_mut(&mut self) -> &mut $to {
                 &mut self.0
             }
-        }
-    };
-}
-
-macro_rules! get_opt {
-    ($ops:expr => $s:ident {$($name:ident : $id:ident,)*}) => {
-       $s {
-           $(
-                $name : $ops.0.remove($id::option_name()).map(|op|{
-                    if let crate::ode::options::OdeOption::$name(val) = op {
-                        Some(val.0)
-                    } else {
-                        None
-                    }
-                }),
-           )*
-        }
-    };
-}
-
-macro_rules! impl_ode_ops {
-    ( $(#[$a:meta])* @common $id:ident {
-        $($(#[$fa:meta])* $fname:ident: $fty:ident),*
-    }) => {
-
-        $(#[$a])*
-        #[derive(Debug, Clone, Builder)]
-        pub struct $id {
-            #[builder(setter(strip_option), default)]
-            pub reltol : Option<Reltol>,
-            pub abstol : Option<Abstol>,
-            pub minstep : Option<Minstep>,
-            pub maxstep : Option<Maxstep>,
-            pub initstep : Option<Initstep>,
-            pub norm : Option<Norm>,
-            pub step_timeout : Option<Timeout>,
-            $(
-               $(#[$fa])*
-               #[builder(setter(into))]
-               pub $fname : $fty,
-            )*
-        }
-
-        impl From<crate::ode::options::OdeOptionMap> for $id {
-
-            fn from(mut ops: OdeOptionMap) -> Self {
-                unimplemented!()
-//                get_opt!{
-//                    ops => $id {
-//                        reltol : Reltol,
-//                        abstol : Abstol,
-//                        minstep : Minstep,
-//                        maxstep : Maxstep,
-//                        initstep : Initstep,
-//                         $(
-//                            $f : $name,
-//                         )*
-//                    }
-//                }
-            }
-        }
-
-        impl Into<crate::ode::options::OdeOptionMap> for $id {
-
-            fn into(self) -> crate::ode::options::OdeOptionMap {
-                unimplemented!()
-            }
-
         }
     };
 }

@@ -1,6 +1,5 @@
 use crate::ode::runge_kutta::WeightType;
-use snafu::{ensure, Backtrace, ErrorCompat, ResultExt, Snafu};
-use std::str::FromStr;
+use snafu::{Backtrace, Snafu};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -15,11 +14,11 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn uninitialized<T: Into<String>>(msg: T) -> Self {
+    pub fn uninitialized<T: Into<String>>(msg: T) -> Self {
         Error::Uninitialized { msg: msg.into() }
     }
 
-    pub(crate) fn ode<T: Into<OdeError>>(err: T) -> Self {
+    pub fn ode<T: Into<OdeError>>(err: T) -> Self {
         Error::Ode { err: err.into() }
     }
 }
