@@ -114,6 +114,12 @@ impl Default for Points {
     }
 }
 
+impl Into<OdeOption> for Points {
+    fn into(self) -> OdeOption {
+        OdeOption::Points(self)
+    }
+}
+
 impl fmt::Display for Points {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Points: ")?;
@@ -176,8 +182,15 @@ macro_rules! option {
             fn from(item: $value) -> Self {
                 $id(item)
             }
-
         }
+
+        impl Into<OdeOption> for $id {
+
+            fn into(self) -> OdeOption {
+                OdeOption::$id(self)
+            }
+        }
+
     };
 
     // List option, multiple items
@@ -191,6 +204,13 @@ macro_rules! option {
             #[inline]
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 fmt_comma_delimited(f, &self.0)
+            }
+        }
+
+        impl Into<OdeOption> for $id {
+
+            fn into(self) -> OdeOption {
+                OdeOption::$id(self)
             }
         }
     };
