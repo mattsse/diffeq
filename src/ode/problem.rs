@@ -201,10 +201,10 @@ where
 
         // store for the computed values
         let mut ys = Vec::with_capacity(self.tspan.len());
+        ys.push(self.y0.clone());
 
         let mut coeff = CoefficientPoint::new(init.f0.clone(), self.y0.clone());
 
-        ys.push(self.y0.clone());
         let mut iter_fixed = 1usize;
         // integration loop
         loop {
@@ -357,6 +357,56 @@ where
             tout: self.tspan,
             yout: ys,
         }
+    }
+
+    /// Solve stiff systems based on a modified Rosenbrock triple
+    pub fn ode23s<S: Dim, Ops: Into<AdaptiveOptions>>(
+        &self,
+        opts: Ops,
+    ) -> Result<OdeSolution<f64, Y>, OdeError> {
+        if self.tspan.is_empty() {
+            // nothing to solve
+            return Ok(OdeSolution::default());
+        }
+        let t = self.tspan[0];
+
+        let tend = self.tspan[self.tspan.len() - 1];
+
+        let opts = opts.into();
+        let reltol = opts.reltol.0;
+        let abstol = opts.abstol.0;
+        let minstep = opts
+            .minstep
+            .map_or_else(|| abs(tend - t) / 1e18, |step| step.0);
+
+        let maxstep = opts
+            .maxstep
+            .map_or_else(|| abs(tend - t) / 2.5, |step| step.0);
+
+        let two_sqrt = 2f64.sqrt();
+        let d = 0.5 + two_sqrt;
+        let e32 = 6. + two_sqrt;
+
+        let mut init = if opts.initstep.0 == 0. {
+            // initial guess at a step size
+            self.hinit(&self.y0, t, tend, 3, reltol, abstol)?
+        } else {
+            InitialHint {
+                h: opts.initstep.0,
+                tdir: (tend - t).signum(),
+                f0: (self.f)(t, &self.y0),
+            }
+        };
+
+        init.h = init.tdir * init.h.abs().min(maxstep);
+
+        let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
+        tspan.push(t);
+
+        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        ys.push(self.y0.clone());
+
+        unimplemented!()
     }
 
     /// ```latex
@@ -609,6 +659,36 @@ where
 
         Ok(InitialHint { h, tdir, f0 })
     }
+
+    /// Crude forward finite differences estimator of Jacobian as fallback
+    /// returns a NxN Matrix where N is the degree of freedom of the `OdeType` `y`
+    pub fn fdjacobian(&self, x: &Y, t: f64) -> Vec<Y> {
+        let ftx = (self.f)(t, x);
+        let lx = ftx.dof();
+        let mut dfdx = Vec::with_capacity(lx);
+
+        for j in 0..lx {
+            let mut xj = x.get(j);
+            if xj == T::zero() {
+                xj += T::one();
+            }
+            let dxj = xj * 0.01;
+            let mut tmp = x.clone();
+            for i in 0..lx {
+                *tmp.get_mut(i) += dxj;
+            }
+
+            let mut yj = (self.f)(t, &tmp);
+            for i in 0..lx {
+                let mut yi = yj.get_mut(i);
+                *yi -= ftx.get(i);
+                *yi /= dxj;
+            }
+            dfdx.push(yj);
+        }
+
+        dfdx
+    }
 }
 
 #[derive(Debug)]
@@ -708,5 +788,17 @@ mod tests {
             vec![1., 2., 3., 4., 5., 7.],
             t6.ode_iter().collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn fdjacobian_test() {
+        let problem = lorenz_problem();
+
+        // dFdx[-10.0 10.0 0.0; 28.0 -1.0 -0.1; 0.0 0.1 -2.66667]
+        let x = vec![0.1, 0.0, 0.0];
+
+        let jac = problem.fdjacobian(&x, 0.0);
+
+        println!("{:?}", jac);
     }
 }
