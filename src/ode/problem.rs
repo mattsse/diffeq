@@ -5,7 +5,7 @@ use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
 use alga::general::RealField;
-use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2};
+use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2, DMatrix, Dynamic, Matrix};
 use num_traits::{abs, signum};
 use std::fmt;
 use std::ops::{Add, Mul};
@@ -369,16 +369,13 @@ where
             return Ok(OdeSolution::default());
         }
         let t = self.tspan[0];
-
         let tend = self.tspan[self.tspan.len() - 1];
-
         let opts = opts.into();
         let reltol = opts.reltol.0;
         let abstol = opts.abstol.0;
         let minstep = opts
             .minstep
             .map_or_else(|| abs(tend - t) / 1e18, |step| step.0);
-
         let maxstep = opts
             .maxstep
             .map_or_else(|| abs(tend - t) / 2.5, |step| step.0);
@@ -401,10 +398,35 @@ where
         init.h = init.tdir * init.h.abs().min(maxstep);
 
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
+        // first output time
         tspan.push(t);
 
         let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        // first output solution
         ys.push(self.y0.clone());
+
+        // get Jacobian of F wrt y0
+        let jac = self.fdjacobian(&self.y0, t);
+
+        while (t - tend).abs() > 0. && minstep < init.h.abs() {
+            if (t - tend).abs() < init.h.abs() {
+                init.h = tend - t;
+            }
+
+            let w = if jac.len() == 1 {
+                // jacobian is a 1x1 matrix, means the dof of the OdeType is also 1 (single item)
+//                let _  = T::one() - jac[0].get(0) * (init.h * d);
+            } else {
+
+            };
+
+
+            // approximate time-derivative of F
+//            T = h*d*(F(t + h/100, y) - F0)/(h/100)
+
+        }
+
+
 
         unimplemented!()
     }
@@ -662,22 +684,24 @@ where
 
     /// Crude forward finite differences estimator of Jacobian as fallback
     /// returns a NxN Matrix where N is the degree of freedom of the `OdeType` `y`
-    pub fn fdjacobian(&self, x: &Y, t: f64) -> Vec<Y> {
+    /// each entry represents a column of the NxN Matrix
+    pub fn fdjacobian(&self, x: &Y, t: f64) -> DMatrix<T> {
         let ftx = (self.f)(t, x);
         let lx = ftx.dof();
-        let mut dfdx = Vec::with_capacity(lx);
 
+        let mat = DMatrix::<T>::zeros(lx,lx);
+
+        // allocate a new vec with the capacity of the dof of the type
+        let mut dfdx = Vec::with_capacity(lx);
         for j in 0..lx {
             let mut xj = x.get(j);
             if xj == T::zero() {
                 xj += T::one();
             }
+            // The / 100. is heuristic
             let dxj = xj * 0.01;
             let mut tmp = x.clone();
-            for i in 0..lx {
-                *tmp.get_mut(i) += dxj;
-            }
-
+            *tmp.get_mut(j) += dxj;
             let mut yj = (self.f)(t, &tmp);
             for i in 0..lx {
                 let mut yi = yj.get_mut(i);
@@ -686,8 +710,8 @@ where
             }
             dfdx.push(yj);
         }
-
-        dfdx
+        // dfdx
+        mat
     }
 }
 
