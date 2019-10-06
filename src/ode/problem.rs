@@ -5,7 +5,7 @@ use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
 use alga::general::RealField;
-use na::{allocator::Allocator, DMatrix, DefaultAllocator, Dim, Dynamic, Matrix, U1, U2};
+use na::{allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, Dynamic, Matrix, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
 use std::ops::{Add, Mul};
@@ -368,7 +368,7 @@ where
             // nothing to solve
             return Ok(OdeSolution::default());
         }
-        let t = self.tspan[0];
+        let mut t = self.tspan[0];
         let tend = self.tspan[self.tspan.len() - 1];
         let opts = opts.into();
         let reltol = opts.reltol.0;
@@ -397,38 +397,125 @@ where
 
         init.h = init.tdir * init.h.abs().min(maxstep);
 
-        let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
+        let mut tout: Vec<f64> = Vec::with_capacity(self.tspan.len());
         // first output time
-        tspan.push(t);
+        tout.push(t);
 
-        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        let mut yout = Vec::with_capacity(self.tspan.len());
         // first output solution
-        ys.push(self.y0.clone());
+        yout.push(self.y0.clone());
 
         // get Jacobian of F wrt y0
-        let jac = self.fdjacobian(&self.y0, t);
+        let mut jac = self.fdjacobian(&self.y0, t);
 
         let (m, n) = jac.shape();
         let identity = DMatrix::<T>::identity(m, n);
+
+        let mut y = self.y0.clone();
+        let mut f0 = DVector::from_iterator(y.dof(), init.f0.ode_iter());
 
         while (t - tend).abs() > 0. && minstep < init.h.abs() {
             if (t - tend).abs() < init.h.abs() {
                 init.h = tend - t;
             }
 
-            let w = if jac.len() == 1 {
-                // jacobian is a 1x1 matrix, means the dof of the OdeType is also 1 (single item)
-                //                I - h*d*J
-                // TODO
-                //                let _ = jac * (init.h * d);
-            } else {
+            let mut w = identity.clone() - jac.clone() * (T::one() * (init.h * d));
+            if jac.len() != 1 {
+                //                W = lu( I - h*d*J )
+                // TODO how rm clone?
+                w = w.lu().lu_internal().clone();
             };
+            // TODO try_inverse?
 
-            // approximate time-derivative of F
-            //            T = h*d*(F(t + h/100, y) - F0)/(h/100)
+            // approximate time-derivative of f
+
+            let mut fdt =
+                DVector::from_iterator(y.dof(), (self.f)(t + init.h / 100., &y).ode_iter());
+
+            for i in 0..fdt.dof() {
+                let fdti = fdt[i] - init.f0.get(i);
+                fdt[i] = fdti * ((init.h * d) / (init.h / 100.));
+            }
+
+            // modified Rosenbrock formula
+            // inv(W) * (F0 + T)
+            // TODO handle NoneError
+            let w_inv = w.try_inverse().unwrap();
+            let k1 = w_inv.clone() * (f0.clone() * fdt.clone());
+
+            let mut f1y = y.clone();
+            for i in 0..y.dof() {
+                *f1y.get_mut(i) += (k1[i] * 0.5 * init.h);
+            }
+
+            let f1 = DVector::from_iterator(y.dof(), (self.f)(t + 0.5 * init.h, &f1y).ode_iter());
+            let k2 = w_inv.clone() * (f1.clone() - k1.clone()) + k1.clone();
+
+            let mut ynew = y.clone();
+            for i in 0..ynew.dof() {
+                *ynew.get_mut(i) += (k2[i] * init.h);
+            }
+
+            let f2 = DVector::from_iterator(y.dof(), (self.f)(t + init.h, &ynew).ode_iter());
+
+            let k3 = w_inv
+                * (f2.clone()
+                    - ((k2.clone() - f1) * (T::one() * e32))
+                    - ((k1.clone() - f0.clone()) * (T::one() * 2.))
+                    + fdt);
+
+            // error estimate
+            let kerr = (k1.clone() - (k2.clone() * (T::one() * 2.)) + k3);
+            // TODO impl Pnorm for Iterator type
+            let mut etmp = y.clone();
+            for i in 0..etmp.dof() {
+                etmp.insert(i, kerr[i]);
+            }
+            let err = etmp.pnorm(PNorm::default()) * (init.h.abs() / 6.);
+
+            // allowable error
+            let delta = (y.pnorm(PNorm::default()).max(ynew.pnorm(PNorm::default())) * reltol)
+                .max(T::one() * abstol);
+
+            if err <= delta {
+                // only points in tspan are requested
+                // -> find relevant points in (t,t+h]
+                for toi in &self.tspan {
+                    if *toi > t && *toi <= t + init.h {
+                        // rescale to (0,1]
+                        let s = (*toi - t) / init.h;
+                        // use interpolation formula to get solutions at t=toi
+                        tout.push(*toi);
+
+                        let ktmp = k1.clone() * (T::one() * (s * (1. - s) / (1. - 2. * d)))
+                            + k2.clone() * (T::one() * (s * (s - 2. * d) / (1. - 2. * d)));
+                        let mut ytmp = y.clone();
+                        for i in 0..ytmp.dof() {
+                            *ytmp.get_mut(i) += (ktmp[i] * init.h);
+                        }
+                        yout.push(ytmp);
+                    }
+                }
+
+                if Points::All == opts.points && (tout[tout.len() - 1] != t + init.h) {
+                    // add the intermediate points
+                    tout.push(t + init.h);
+                    yout.push(ynew.clone());
+                }
+
+                t = t + init.h;
+                y = ynew;
+                // use FSAL property
+                f0 = f2;
+                // get Jacobian of F wrt y for new solution
+                jac = self.fdjacobian(&y, t);
+            }
+
+            let r: f64 = (delta / err).into();
+            init.h = maxstep.min(r.powf(1. / 3.) * init.h.abs() * 0.8) * init.tdir;
         }
 
-        unimplemented!()
+        Ok(OdeSolution { yout, tout })
     }
 
     /// ```latex
