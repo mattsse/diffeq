@@ -5,7 +5,7 @@ use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
 use alga::general::RealField;
-use na::{allocator::Allocator, DefaultAllocator, Dim, U1, U2, DMatrix, Dynamic, Matrix};
+use na::{allocator::Allocator, DMatrix, DefaultAllocator, Dim, Dynamic, Matrix, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
 use std::ops::{Add, Mul};
@@ -408,6 +408,9 @@ where
         // get Jacobian of F wrt y0
         let jac = self.fdjacobian(&self.y0, t);
 
+        let (m, n) = jac.shape();
+        let identity = DMatrix::<T>::identity(m, n);
+
         while (t - tend).abs() > 0. && minstep < init.h.abs() {
             if (t - tend).abs() < init.h.abs() {
                 init.h = tend - t;
@@ -415,18 +418,15 @@ where
 
             let w = if jac.len() == 1 {
                 // jacobian is a 1x1 matrix, means the dof of the OdeType is also 1 (single item)
-//                let _  = T::one() - jac[0].get(0) * (init.h * d);
+                //                I - h*d*J
+                // TODO
+                //                let _ = jac * (init.h * d);
             } else {
-
             };
 
-
             // approximate time-derivative of F
-//            T = h*d*(F(t + h/100, y) - F0)/(h/100)
-
+            //            T = h*d*(F(t + h/100, y) - F0)/(h/100)
         }
-
-
 
         unimplemented!()
     }
@@ -684,34 +684,29 @@ where
 
     /// Crude forward finite differences estimator of Jacobian as fallback
     /// returns a NxN Matrix where N is the degree of freedom of the `OdeType` `y`
-    /// each entry represents a column of the NxN Matrix
     pub fn fdjacobian(&self, x: &Y, t: f64) -> DMatrix<T> {
         let ftx = (self.f)(t, x);
         let lx = ftx.dof();
 
-        let mat = DMatrix::<T>::zeros(lx,lx);
-
-        // allocate a new vec with the capacity of the dof of the type
-        let mut dfdx = Vec::with_capacity(lx);
-        for j in 0..lx {
-            let mut xj = x.get(j);
+        let mut dfdx = DMatrix::<T>::zeros(lx, lx);
+        for n in 0..lx {
+            let mut xj = x.get(n);
             if xj == T::zero() {
                 xj += T::one();
             }
             // The / 100. is heuristic
             let dxj = xj * 0.01;
             let mut tmp = x.clone();
-            *tmp.get_mut(j) += dxj;
+            *tmp.get_mut(n) += dxj;
             let mut yj = (self.f)(t, &tmp);
-            for i in 0..lx {
-                let mut yi = yj.get_mut(i);
-                *yi -= ftx.get(i);
-                *yi /= dxj;
+            for m in 0..lx {
+                let mut yi = yj.get(m);
+                yi -= ftx.get(m);
+                yi /= dxj;
+                dfdx[(m, n)] = yi;
             }
-            dfdx.push(yj);
         }
-        // dfdx
-        mat
+        dfdx
     }
 }
 
