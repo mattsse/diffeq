@@ -419,16 +419,14 @@ where
                 init.h = tend - t;
             }
 
-            let mut w = identity.clone() - jac.clone() * (T::one() * (init.h * d));
+            let mut w = &identity - &jac * (T::one() * (init.h * d));
             if jac.len() != 1 {
                 //                W = lu( I - h*d*J )
                 // TODO how rm clone?
                 w = w.lu().lu_internal().clone();
             };
-            // TODO try_inverse?
 
             // approximate time-derivative of f
-
             let mut fdt =
                 DVector::from_iterator(y.dof(), (self.f)(t + init.h / 100., &y).ode_iter());
 
@@ -441,7 +439,7 @@ where
             // inv(W) * (F0 + T)
             // TODO handle NoneError
             let w_inv = w.try_inverse().unwrap();
-            let k1 = w_inv.clone() * (f0.clone() * fdt.clone());
+            let k1 = &w_inv * (&f0 * &fdt);
 
             let mut f1y = y.clone();
             for i in 0..y.dof() {
@@ -449,7 +447,7 @@ where
             }
 
             let f1 = DVector::from_iterator(y.dof(), (self.f)(t + 0.5 * init.h, &f1y).ode_iter());
-            let k2 = w_inv.clone() * (f1.clone() - k1.clone()) + k1.clone();
+            let k2 = &w_inv * (&f1 - &k1) + &k1;
 
             let mut ynew = y.clone();
             for i in 0..ynew.dof() {
@@ -459,13 +457,10 @@ where
             let f2 = DVector::from_iterator(y.dof(), (self.f)(t + init.h, &ynew).ode_iter());
 
             let k3 = w_inv
-                * (f2.clone()
-                    - ((k2.clone() - f1) * (T::one() * e32))
-                    - ((k1.clone() - f0.clone()) * (T::one() * 2.))
-                    + fdt);
+                * (&f2 - ((&k2 - &f1) * (T::one() * e32)) - ((&k1 - &f0) * (T::one() * 2.)) + &fdt);
 
             // error estimate
-            let kerr = (k1.clone() - (k2.clone() * (T::one() * 2.)) + k3);
+            let kerr = (&k1 - (&k2 * (T::one() * 2.)) + &k3);
             // TODO impl Pnorm for Iterator type
             let mut etmp = y.clone();
             for i in 0..etmp.dof() {
@@ -487,8 +482,8 @@ where
                         // use interpolation formula to get solutions at t=toi
                         tout.push(*toi);
 
-                        let ktmp = k1.clone() * (T::one() * (s * (1. - s) / (1. - 2. * d)))
-                            + k2.clone() * (T::one() * (s * (s - 2. * d) / (1. - 2. * d)));
+                        let ktmp = &k1 * (T::one() * (s * (1. - s) / (1. - 2. * d)))
+                            + &k2 * (T::one() * (s * (s - 2. * d) / (1. - 2. * d)));
                         let mut ytmp = y.clone();
                         for i in 0..ytmp.dof() {
                             *ytmp.get_mut(i) += (ktmp[i] * init.h);
