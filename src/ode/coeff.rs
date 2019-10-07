@@ -1,16 +1,11 @@
 use crate::ode::types::OdeType;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CoefficientMap<Y: OdeType> {
     inner: Vec<CoefficientPoint<Y>>,
 }
 
 impl<Y: OdeType> CoefficientMap<Y> {
-    #[inline]
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
-    }
-
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {

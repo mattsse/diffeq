@@ -187,10 +187,9 @@ where
     /// First same as last. c.f. H&W p.167
     #[inline]
     pub fn is_first_same_as_last(&self) -> bool {
-        let b = self.b.as_slice();
         let row_idx = self.nstages() - 1;
-        for c in 0..self.nstages() {
-            if self.a[(row_idx, c)] != b[c] {
+        for (col, b) in self.b.as_slice().iter().enumerate().take(self.nstages()) {
+            if self.a[(row_idx, col)] != *b {
                 return false;
             }
         }
