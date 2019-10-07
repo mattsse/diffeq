@@ -394,7 +394,6 @@ where
                 f0: (self.f)(t, &self.y0),
             }
         };
-
         let mut h = init.tdir * init.h.abs().min(maxstep);
 
         let mut tout: Vec<f64> = Vec::with_capacity(self.tspan.len());
@@ -406,7 +405,7 @@ where
         yout.push(self.y0.clone());
 
         // get Jacobian of F wrt y0
-        let mut jac = self.fdjacobian(&self.y0, t);
+        let mut jac = self.fdjacobian(t, &self.y0);
 
         let (m, n) = jac.shape();
         let identity = DMatrix::<T>::identity(m, n);
@@ -502,7 +501,7 @@ where
                 // use FSAL property
                 f0 = f2;
                 // get Jacobian of F wrt y for new solution
-                jac = self.fdjacobian(&y, t);
+                jac = self.fdjacobian(t, &y);
             }
 
             let r: f64 = (delta / err).into();
@@ -765,7 +764,7 @@ where
 
     /// Crude forward finite differences estimator of Jacobian as fallback
     /// returns a NxN Matrix where N is the degree of freedom of the `OdeType` `y`
-    pub fn fdjacobian(&self, x: &Y, t: f64) -> DMatrix<T> {
+    pub fn fdjacobian(&self, t: f64, x: &Y) -> DMatrix<T> {
         let ftx = (self.f)(t, x);
         let lx = ftx.dof();
 
@@ -897,7 +896,7 @@ mod tests {
         // dFdx[-10.0 10.0 0.0; 28.0 -1.0 -0.1; 0.0 0.1 -2.66667]
         let x = vec![0.1, 0.0, 0.0];
 
-        let jac = problem.fdjacobian(&x, 0.0);
+        let jac = problem.fdjacobian(0.0, &x);
 
         println!("{:?}", jac);
     }
