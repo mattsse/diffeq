@@ -40,6 +40,8 @@ pub enum OdeError {
     ZeroTimeSpan,
     #[snafu(display("Initial step has wrong sign"))]
     InvalidInitstep,
+    #[snafu(display("Unable to compute matrix operation"))]
+    InvalidMatrix,
 }
 
 impl Into<Error> for OdeError {

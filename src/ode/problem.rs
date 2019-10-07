@@ -375,7 +375,7 @@ where
         let abstol = opts.abstol.0;
         let minstep = opts
             .minstep
-            .map_or_else(|| abs(tend - t) / 1e18, |step| step.0);
+            .map_or_else(|| (tend - t).abs() / 1e18, |step| step.0);
         let maxstep = opts
             .maxstep
             .map_or_else(|| abs(tend - t) / 2.5, |step| step.0);
@@ -417,11 +417,9 @@ where
             if (t - tend).abs() < h.abs() {
                 h = tend - t;
             }
-
             let mut w = &identity - &jac * (T::one() * (h * d));
             if jac.len() != 1 {
-                //                W = lu( I - h*d*J )
-                // TODO how rm clone?
+                //  W = lu( I - h*d*J )
                 w = w.lu().lu_internal().clone();
             };
 
@@ -435,8 +433,7 @@ where
 
             // modified Rosenbrock formula
             // inv(W) * (F0 + T)
-            // TODO handle NoneError
-            let w_inv = w.try_inverse().unwrap();
+            let w_inv = w.try_inverse().ok_or(OdeError::InvalidMatrix)?;
             let k1 = &w_inv * (&f0 * &fdt);
 
             let mut f1y = y.clone();
@@ -454,7 +451,7 @@ where
 
             let f2 = DVector::from_iterator(y.dof(), (self.f)(t + h, &ynew).ode_iter());
 
-            let k3 = w_inv
+            let k3 = &w_inv
                 * (&f2 - ((&k2 - &f1) * (T::one() * e32)) - ((&k1 - &f0) * (T::one() * 2.)) + &fdt);
 
             // error estimate
