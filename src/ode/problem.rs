@@ -1,6 +1,7 @@
 use crate::error::{Error, OdeError, Result};
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout};
+use crate::ode::rosenbrock::RosenbrockCoeffs;
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
@@ -78,13 +79,13 @@ where
     pub fn build(self) -> Result<OdeProblem<F, Y>> {
         let f = self
             .f
-            .ok_or(Error::uninitialized("Required problem must be initialized"))?;
-        let y0 = self.y0.ok_or(Error::uninitialized(
-            "Initial starting point must be initialized",
-        ))?;
+            .ok_or_else(|| Error::uninitialized("Required problem must be initialized"))?;
+        let y0 = self
+            .y0
+            .ok_or_else(|| Error::uninitialized("Initial starting point must be initialized"))?;
         let tspan = self
             .tspan
-            .ok_or(Error::uninitialized("Time span must be initialized"))?;
+            .ok_or_else(|| Error::uninitialized("Time span must be initialized"))?;
 
         Ok(OdeProblem { f, y0, tspan })
     }
@@ -181,7 +182,7 @@ where
         let init = self.hinit(&self.y0, t, tend, btab.symbol.order().min(), reltol, abstol)?;
 
         let mut dt = if opts.initstep.0 != 0. {
-            if signum(opts.initstep.0) == init.tdir {
+            if (signum(opts.initstep.0) - init.tdir).abs() < std::f64::EPSILON {
                 opts.initstep.0
             } else {
                 return Err(OdeError::InvalidInitstep);
@@ -488,13 +489,15 @@ where
                     }
                 }
 
-                if Points::All == opts.points && (tout[tout.len() - 1] != t + h) {
+                if Points::All == opts.points
+                    && (tout[tout.len() - 1] - (t + h)).abs() > std::f64::EPSILON
+                {
                     // add the intermediate points
                     tout.push(t + h);
                     yout.push(ynew.clone());
                 }
 
-                t = t + h;
+                t += h;
                 y = ynew;
                 // use FSAL property
                 f0 = f2;
@@ -510,30 +513,75 @@ where
     }
 
     /// Solve stiff differential equations, Rosenbrock method with provided coefficients.
-    pub fn oderosenbrock<Ops: Into<AdaptiveOptions>>(
+    pub fn oderosenbrock<S: Dim>(
         &self,
-        opts: Ops,
-    ) -> Result<OdeSolution<f64, Y>, OdeError> {
+        coeffs: RosenbrockCoeffs<S>,
+    ) -> Result<OdeSolution<f64, Y>, OdeError>
+    where
+        DefaultAllocator: Allocator<f64, S, S> + Allocator<f64, S>,
+    {
         if self.tspan.is_empty() {
             // nothing to solve
             return Ok(OdeSolution::default());
         }
-        let opts = opts.into();
 
         let h = diff(&self.tspan);
 
         let mut x = Vec::with_capacity(self.tspan.len());
         x.push(self.y0.clone());
 
+        let identity = DMatrix::<T>::identity(self.y0.dof(), self.y0.dof());
+
         for (solstep, ts) in self.tspan.iter().enumerate() {
             let hs = h[solstep];
             let xs = x[solstep].clone();
-            let d_fdx = self.fdjacobian(*ts, &xs);
+            let dfdx = self.fdjacobian(*ts, &xs);
 
-            //            jac = I / (gamma * hs) - dFdx
+            let (m, n) = dfdx.shape();
+            let v = DMatrix::from_diagonal_element(m, n, T::one() * (1. / (coeffs.gamma * hs)));
+
+            let jac = v - dfdx;
+
+            let jac_inv = jac.try_inverse().ok_or(OdeError::InvalidMatrix)?;
+
+            let mut g = Vec::with_capacity(coeffs.a.nrows());
+
+            let yg =
+                DVector::from_iterator(xs.dof(), (self.f)(ts + coeffs.b[0] * hs, &xs).ode_iter());
+
+            let jac_yg = jac_inv * yg;
+
+            // convert back to odetype
+            let mut g1 = xs.clone();
+            for i in 0..g1.dof() {
+                g1.insert(i, jac_yg[i]);
+            }
+
+            g.push(g1);
+
+            let mut next_x = x[x.len() - 1].clone();
+
+            let g1 = &g[0];
+            for i in 0..next_x.dof() {
+                *next_x.get_mut(i) += (g1.get(i) * coeffs.b[0]);
+            }
+
+            for i in 1..coeffs.a.nrows() {
+                for j in 0..i - 1 {
+                    // TODO
+                }
+            }
         }
 
         Ok(OdeSolution { yout: x, tout: h })
+    }
+
+    pub fn ode4s_kr(&self) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderosenbrock(RosenbrockCoeffs::kr4())
+    }
+
+    pub fn ode4s_s(&self) -> Result<OdeSolution<f64, Y>, OdeError> {
+        self.oderosenbrock(RosenbrockCoeffs::s4())
     }
 
     /// ```latex
@@ -684,7 +732,7 @@ where
     }
 
     /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
-    ///
+    // TODO fix _norm usage
     fn stepsize_hw92(
         &self,
         dt: f64,
@@ -704,7 +752,7 @@ where
         let facmin = 0.2;
 
         for d in 0..x0.dof() {
-            if std::f64::NAN == xtrial.get(d).into() {
+            if xtrial.get(d).into().is_nan() {
                 return StepHW92 {
                     err: 10.,
                     dt: facmin * dt,
@@ -718,7 +766,7 @@ where
         let err = xerr.pnorm(PNorm::default()).into();
 
         let pow = 1. / (order + 1) as f64;
-        let mut new_dt = maxstep.min(facmin.max((err.powi(-1).powf(pow) * fac).into()) * tdir * dt);
+        let mut new_dt = maxstep.min(facmin.max(err.powi(-1).powf(pow) * fac) * tdir * dt);
 
         if timeout > 0 {
             new_dt = new_dt.min(dt);
@@ -818,7 +866,7 @@ where
 /// Finite difference operator on a vector
 #[inline]
 pub fn diff<R: RealField>(a: &[R]) -> Vec<R> {
-    a.into_iter()
+    a.iter()
         .skip(1)
         .enumerate()
         .map(|(i, r)| *r - a[i])
