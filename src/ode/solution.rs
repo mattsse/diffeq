@@ -1,8 +1,11 @@
+#[cfg(feature = "serde0")]
+use serde::{Deserialize, Serialize};
 use crate::ode::types::OdeType;
 use alga::general::RealField;
 use std::fmt;
 
 /// pairs the timestamp with the corresponding calculated value`
+#[cfg_attr(feature = "serde0", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct SolutionPoint<Y: OdeType, T: RealField = f64> {
     pub t: T,
@@ -16,14 +19,26 @@ impl<Y: OdeType, T: RealField> SolutionPoint<Y, T> {
     }
 }
 
-// TODO rm `T`, use f64 instead
-#[derive(Debug)]
+#[cfg_attr(feature = "serde0", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct OdeSolution<T: RealField, Y: OdeType> {
     /// Vector of points at which solutions were obtained
     pub tout: Vec<T>,
     /// solutions at times `tout`, stored as a vector `yout`
     pub yout: Vec<Y>,
 }
+
+impl <T: RealField, Y: OdeType> OdeSolution<T,Y> {
+
+
+    /// pair each timestep with the corresponding output
+    #[inline]
+    pub fn zipped(self) -> Vec<(T, Y)>{
+        self.tout.into_iter().zip(self.yout).collect()
+    }
+
+}
+
 
 impl<T: RealField, Y: OdeType> Default for OdeSolution<T, Y> {
     fn default() -> Self {
