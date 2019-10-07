@@ -1,7 +1,7 @@
-#[cfg(feature = "serde0")]
-use serde::{Deserialize, Serialize};
 use crate::ode::types::OdeType;
 use alga::general::RealField;
+#[cfg(feature = "serde0")]
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// pairs the timestamp with the corresponding calculated value`
@@ -28,17 +28,13 @@ pub struct OdeSolution<T: RealField, Y: OdeType> {
     pub yout: Vec<Y>,
 }
 
-impl <T: RealField, Y: OdeType> OdeSolution<T,Y> {
-
-
+impl<T: RealField, Y: OdeType> OdeSolution<T, Y> {
     /// pair each timestep with the corresponding output
     #[inline]
-    pub fn zipped(self) -> Vec<(T, Y)>{
+    pub fn zipped(self) -> Vec<(T, Y)> {
         self.tout.into_iter().zip(self.yout).collect()
     }
-
 }
-
 
 impl<T: RealField, Y: OdeType> Default for OdeSolution<T, Y> {
     fn default() -> Self {

@@ -251,7 +251,23 @@ impl_ode_tuple!([(f64, f64, f64, f64, f64, f64, f64, f64, f64) => 9;f64;0,1,2,3,
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
-    fn pnorm() {}
+    fn ode_tuple() {
+        let mut t3 = (0., 1., 2.);
+        assert_eq!(3, t3.dof());
+        assert_eq!(0., t3.get(0));
+        t3.insert(0, 2.);
+        assert_eq!(2., t3.get(0));
+        assert_eq!(vec![2., 1., 2.], t3.ode_iter().collect::<Vec<_>>());
+
+        let mut t6 = (1., 2., 3., 4., 5., 6.);
+        assert_eq!(6, t6.dof());
+        t6.insert(5, 7.);
+        assert_eq!(
+            vec![1., 2., 3., 4., 5., 7.],
+            t6.ode_iter().collect::<Vec<_>>()
+        );
+    }
 }

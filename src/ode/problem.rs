@@ -360,7 +360,7 @@ where
     }
 
     /// Solve stiff systems based on a modified Rosenbrock triple
-    pub fn ode23s<S: Dim, Ops: Into<AdaptiveOptions>>(
+    pub fn ode23s<Ops: Into<AdaptiveOptions>>(
         &self,
         opts: Ops,
     ) -> Result<OdeSolution<f64, Y>, OdeError> {
@@ -825,6 +825,8 @@ impl fmt::Display for Diagnostics {
 mod tests {
     use super::*;
     use crate::ode::options::OdeOp;
+    use std::fs::OpenOptions;
+    use std::io::Write;
 
     const DT: f64 = 0.001;
     const TF: f64 = 100.0;
@@ -871,32 +873,40 @@ mod tests {
     }
 
     #[test]
-    fn ode_tuple() {
-        let mut t3 = (0., 1., 2.);
-        assert_eq!(3, t3.dof());
-        assert_eq!(0., t3.get(0));
-        t3.insert(0, 2.);
-        assert_eq!(2., t3.get(0));
-        assert_eq!(vec![2., 1., 2.], t3.ode_iter().collect::<Vec<_>>());
-
-        let mut t6 = (1., 2., 3., 4., 5., 6.);
-        assert_eq!(6, t6.dof());
-        t6.insert(5, 7.);
-        assert_eq!(
-            vec![1., 2., 3., 4., 5., 7.],
-            t6.ode_iter().collect::<Vec<_>>()
-        );
+    fn fdjacobian_test() {
+        let problem = lorenz_problem();
+        // dFdx[-10.0 10.0 0.0; 28.0 -1.0 -0.1; 0.0 0.1 -2.66667]
+        let x = Y0.to_vec();
+        let jac = problem.fdjacobian(0.0, &x);
+        assert_eq!((3, 3), jac.shape());
     }
 
     #[test]
-    fn fdjacobian_test() {
+    fn ode23s_test() {
         let problem = lorenz_problem();
 
-        // dFdx[-10.0 10.0 0.0; 28.0 -1.0 -0.1; 0.0 0.1 -2.66667]
-        let x = vec![0.1, 0.0, 0.0];
+        let s = problem.ode23s(&OdeOptionMap::default()).unwrap();
 
-        let jac = problem.fdjacobian(0.0, &x);
+        let mut tyout = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open("ode23s_tout.txt")
+            .unwrap();
 
-        println!("{:?}", jac);
+        write!(tyout, "{:?}", s.tout).unwrap();
+
+        let mut fyout = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open("ode23s_yout.txt")
+            .unwrap();
+
+        for y in &s.yout {
+            for i in y {
+                write!(fyout, "{}, ", *i).unwrap();
+            }
+        }
     }
 }
