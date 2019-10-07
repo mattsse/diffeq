@@ -1,11 +1,11 @@
 use crate::error::{Error, OdeError, Result};
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
-use crate::ode::options::{AdaptiveOptions, OdeOp, OdeOptionMap, Points, StepTimeout};
+use crate::ode::options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout};
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
 use alga::general::RealField;
-use na::{allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, Dynamic, Matrix, U1, U2};
+use na::{allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
 use std::ops::{Add, Mul};
@@ -438,7 +438,7 @@ where
 
             let mut f1y = y.clone();
             for i in 0..y.dof() {
-                *f1y.get_mut(i) += (k1[i] * 0.5 * h);
+                *f1y.get_mut(i) += k1[i] * 0.5 * h;
             }
 
             let f1 = DVector::from_iterator(y.dof(), (self.f)(t + 0.5 * h, &f1y).ode_iter());
@@ -446,7 +446,7 @@ where
 
             let mut ynew = y.clone();
             for i in 0..ynew.dof() {
-                *ynew.get_mut(i) += (k2[i] * h);
+                *ynew.get_mut(i) += k2[i] * h;
             }
 
             let f2 = DVector::from_iterator(y.dof(), (self.f)(t + h, &ynew).ode_iter());
@@ -455,7 +455,7 @@ where
                 * (&f2 - ((&k2 - &f1) * (T::one() * e32)) - ((&k1 - &f0) * (T::one() * 2.)) + &fdt);
 
             // error estimate
-            let kerr = (&k1 - (&k2 * (T::one() * 2.)) + &k3);
+            let kerr = &k1 - (&k2 * (T::one() * 2.)) + &k3;
             // TODO impl Pnorm for Iterator type
             let mut etmp = y.clone();
             for i in 0..etmp.dof() {
@@ -481,7 +481,7 @@ where
                             + &k2 * (T::one() * (s * (s - 2. * d) / (1. - 2. * d)));
                         let mut ytmp = y.clone();
                         for i in 0..ytmp.dof() {
-                            *ytmp.get_mut(i) += (ktmp[i] * h);
+                            *ytmp.get_mut(i) += ktmp[i] * h;
                         }
                         yout.push(ytmp);
                     }
@@ -775,7 +775,7 @@ where
             let dxj = xj * 0.01;
             let mut tmp = x.clone();
             *tmp.get_mut(n) += dxj;
-            let mut yj = (self.f)(t, &tmp);
+            let yj = (self.f)(t, &tmp);
             for m in 0..lx {
                 let mut yi = yj.get(m);
                 yi -= ftx.get(m);
@@ -823,6 +823,7 @@ impl fmt::Display for Diagnostics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ode::options::OdeOp;
 
     const DT: f64 = 0.001;
     const TF: f64 = 100.0;
