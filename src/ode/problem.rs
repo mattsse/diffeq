@@ -384,7 +384,7 @@ where
         let d = 0.5 + two_sqrt;
         let e32 = 6. + two_sqrt;
 
-        let mut init = if opts.initstep.0 == 0. {
+        let init = if opts.initstep.0 == 0. {
             // initial guess at a step size
             self.hinit(&self.y0, t, tend, 3, reltol, abstol)?
         } else {
@@ -395,7 +395,7 @@ where
             }
         };
 
-        init.h = init.tdir * init.h.abs().min(maxstep);
+        let mut h = init.tdir * init.h.abs().min(maxstep);
 
         let mut tout: Vec<f64> = Vec::with_capacity(self.tspan.len());
         // first output time
@@ -414,12 +414,12 @@ where
         let mut y = self.y0.clone();
         let mut f0 = DVector::from_iterator(y.dof(), init.f0.ode_iter());
 
-        while (t - tend).abs() > 0. && minstep < init.h.abs() {
-            if (t - tend).abs() < init.h.abs() {
-                init.h = tend - t;
+        while (t - tend).abs() > 0. && minstep < h.abs() {
+            if (t - tend).abs() < h.abs() {
+                h = tend - t;
             }
 
-            let mut w = &identity - &jac * (T::one() * (init.h * d));
+            let mut w = &identity - &jac * (T::one() * (h * d));
             if jac.len() != 1 {
                 //                W = lu( I - h*d*J )
                 // TODO how rm clone?
@@ -427,12 +427,11 @@ where
             };
 
             // approximate time-derivative of f
-            let mut fdt =
-                DVector::from_iterator(y.dof(), (self.f)(t + init.h / 100., &y).ode_iter());
+            let mut fdt = DVector::from_iterator(y.dof(), (self.f)(t + h / 100., &y).ode_iter());
 
             for i in 0..fdt.dof() {
                 let fdti = fdt[i] - init.f0.get(i);
-                fdt[i] = fdti * ((init.h * d) / (init.h / 100.));
+                fdt[i] = fdti * ((h * d) / (h / 100.));
             }
 
             // modified Rosenbrock formula
@@ -443,18 +442,18 @@ where
 
             let mut f1y = y.clone();
             for i in 0..y.dof() {
-                *f1y.get_mut(i) += (k1[i] * 0.5 * init.h);
+                *f1y.get_mut(i) += (k1[i] * 0.5 * h);
             }
 
-            let f1 = DVector::from_iterator(y.dof(), (self.f)(t + 0.5 * init.h, &f1y).ode_iter());
+            let f1 = DVector::from_iterator(y.dof(), (self.f)(t + 0.5 * h, &f1y).ode_iter());
             let k2 = &w_inv * (&f1 - &k1) + &k1;
 
             let mut ynew = y.clone();
             for i in 0..ynew.dof() {
-                *ynew.get_mut(i) += (k2[i] * init.h);
+                *ynew.get_mut(i) += (k2[i] * h);
             }
 
-            let f2 = DVector::from_iterator(y.dof(), (self.f)(t + init.h, &ynew).ode_iter());
+            let f2 = DVector::from_iterator(y.dof(), (self.f)(t + h, &ynew).ode_iter());
 
             let k3 = w_inv
                 * (&f2 - ((&k2 - &f1) * (T::one() * e32)) - ((&k1 - &f0) * (T::one() * 2.)) + &fdt);
@@ -466,7 +465,7 @@ where
             for i in 0..etmp.dof() {
                 etmp.insert(i, kerr[i]);
             }
-            let err = etmp.pnorm(PNorm::default()) * (init.h.abs() / 6.);
+            let err = etmp.pnorm(PNorm::default()) * (h.abs() / 6.);
 
             // allowable error
             let delta = (y.pnorm(PNorm::default()).max(ynew.pnorm(PNorm::default())) * reltol)
@@ -476,9 +475,9 @@ where
                 // only points in tspan are requested
                 // -> find relevant points in (t,t+h]
                 for toi in &self.tspan {
-                    if *toi > t && *toi <= t + init.h {
+                    if *toi > t && *toi <= t + h {
                         // rescale to (0,1]
-                        let s = (*toi - t) / init.h;
+                        let s = (*toi - t) / h;
                         // use interpolation formula to get solutions at t=toi
                         tout.push(*toi);
 
@@ -486,19 +485,19 @@ where
                             + &k2 * (T::one() * (s * (s - 2. * d) / (1. - 2. * d)));
                         let mut ytmp = y.clone();
                         for i in 0..ytmp.dof() {
-                            *ytmp.get_mut(i) += (ktmp[i] * init.h);
+                            *ytmp.get_mut(i) += (ktmp[i] * h);
                         }
                         yout.push(ytmp);
                     }
                 }
 
-                if Points::All == opts.points && (tout[tout.len() - 1] != t + init.h) {
+                if Points::All == opts.points && (tout[tout.len() - 1] != t + h) {
                     // add the intermediate points
-                    tout.push(t + init.h);
+                    tout.push(t + h);
                     yout.push(ynew.clone());
                 }
 
-                t = t + init.h;
+                t = t + h;
                 y = ynew;
                 // use FSAL property
                 f0 = f2;
@@ -507,7 +506,7 @@ where
             }
 
             let r: f64 = (delta / err).into();
-            init.h = maxstep.min(r.powf(1. / 3.) * init.h.abs() * 0.8) * init.tdir;
+            h = maxstep.min(r.powf(1. / 3.) * h.abs() * 0.8) * init.tdir;
         }
 
         Ok(OdeSolution { yout, tout })
