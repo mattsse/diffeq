@@ -369,28 +369,28 @@ where
             return Ok(OdeSolution::default());
         }
         let mut t = self.tspan[0];
-        let tend = self.tspan[self.tspan.len() - 1];
+        let tfinal = self.tspan[self.tspan.len() - 1];
         let opts = opts.into();
         let reltol = opts.reltol.0;
         let abstol = opts.abstol.0;
         let minstep = opts
             .minstep
-            .map_or_else(|| (tend - t).abs() / 1e18, |step| step.0);
+            .map_or_else(|| (tfinal - t).abs() / 1e18, |step| step.0);
         let maxstep = opts
             .maxstep
-            .map_or_else(|| abs(tend - t) / 2.5, |step| step.0);
+            .map_or_else(|| abs(tfinal - t) / 2.5, |step| step.0);
 
         let two_sqrt = 2f64.sqrt();
-        let d = 0.5 + two_sqrt;
+        let d = 1. / (2. + two_sqrt);
         let e32 = 6. + two_sqrt;
 
         let init = if opts.initstep.0 == 0. {
             // initial guess at a step size
-            self.hinit(&self.y0, t, tend, 3, reltol, abstol)?
+            self.hinit(&self.y0, t, tfinal, 3, reltol, abstol)?
         } else {
             InitialHint {
                 h: opts.initstep.0,
-                tdir: (tend - t).signum(),
+                tdir: (tfinal - t).signum(),
                 f0: (self.f)(t, &self.y0),
             }
         };
@@ -413,9 +413,9 @@ where
         let mut y = self.y0.clone();
         let mut f0 = DVector::from_iterator(y.dof(), init.f0.ode_iter());
 
-        while (t - tend).abs() > 0. && minstep < h.abs() {
-            if (t - tend).abs() < h.abs() {
-                h = tend - t;
+        while (t - tfinal).abs() > 0. && minstep < h.abs() {
+            if (t - tfinal).abs() < h.abs() {
+                h = tfinal - t;
             }
             let mut w = &identity - &jac * (T::one() * (h * d));
             if jac.len() != 1 {
@@ -427,14 +427,15 @@ where
             let mut fdt = DVector::from_iterator(y.dof(), (self.f)(t + h / 100., &y).ode_iter());
 
             for i in 0..fdt.dof() {
-                let fdti = fdt[i] - init.f0.get(i);
+                let fdti = fdt[i] - f0[i];
                 fdt[i] = fdti * ((h * d) / (h / 100.));
             }
 
             // modified Rosenbrock formula
             // inv(W) * (F0 + T)
             let w_inv = w.try_inverse().ok_or(OdeError::InvalidMatrix)?;
-            let k1 = &w_inv * (&f0 * &fdt);
+
+            let k1 = &w_inv * (&f0 + &fdt);
 
             let mut f1y = y.clone();
             for i in 0..y.dof() {
