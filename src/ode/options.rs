@@ -78,11 +78,6 @@ impl From<&OdeOptionMap> for AdaptiveOptions {
     }
 }
 
-// constants for each option name
-//or struct?
-//pub struct OdeName;
-// impls for struct like Headername http https://docs.rs/http/0.1.18/src/http/header/name.rs.html#32-34
-
 pub trait OdeOp {
     fn option_name() -> &'static str;
 }

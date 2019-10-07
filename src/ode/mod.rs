@@ -1,6 +1,7 @@
 pub mod coeff;
 pub mod options;
 pub mod problem;
+pub mod rosenbrock;
 pub mod runge_kutta;
 pub mod solution;
 pub mod types;

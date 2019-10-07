@@ -509,6 +509,7 @@ where
         Ok(OdeSolution { yout, tout })
     }
 
+    /// Solve stiff differential equations, Rosenbrock method with provided coefficients.
     pub fn oderosenbrock<Ops: Into<AdaptiveOptions>>(
         &self,
         opts: Ops,
@@ -519,7 +520,20 @@ where
         }
         let opts = opts.into();
 
-        unimplemented!()
+        let h = diff(&self.tspan);
+
+        let mut x = Vec::with_capacity(self.tspan.len());
+        x.push(self.y0.clone());
+
+        for (solstep, ts) in self.tspan.iter().enumerate() {
+            let hs = h[solstep];
+            let xs = x[solstep].clone();
+            let d_fdx = self.fdjacobian(*ts, &xs);
+
+            //            jac = I / (gamma * hs) - dFdx
+        }
+
+        Ok(OdeSolution { yout: x, tout: h })
     }
 
     /// ```latex
