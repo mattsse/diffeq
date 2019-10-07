@@ -509,6 +509,19 @@ where
         Ok(OdeSolution { yout, tout })
     }
 
+    pub fn oderosenbrock<Ops: Into<AdaptiveOptions>>(
+        &self,
+        opts: Ops,
+    ) -> Result<OdeSolution<f64, Y>, OdeError> {
+        if self.tspan.is_empty() {
+            // nothing to solve
+            return Ok(OdeSolution::default());
+        }
+        let opts = opts.into();
+
+        unimplemented!()
+    }
+
     /// ```latex
     /// e_{n+1}=h\sum _{i=1}^{s}(b_{i}-b_{i}^{*})k_{i}
     /// ```
@@ -788,6 +801,16 @@ where
     }
 }
 
+/// Finite difference operator on a vector
+#[inline]
+pub fn diff<R: RealField>(a: &[R]) -> Vec<R> {
+    a.into_iter()
+        .skip(1)
+        .enumerate()
+        .map(|(i, r)| *r - a[i])
+        .collect()
+}
+
 #[derive(Debug)]
 pub struct InitialHint<Y> {
     /// step size hint
@@ -863,6 +886,14 @@ mod tests {
     #[test]
     fn ode1_test() {
         lorenz_problem().ode1();
+    }
+
+    #[test]
+    fn diff_test() {
+        let a = vec![2., 6., 4., 16.];
+        assert_eq!(vec![4.0, -2.0, 12.0], diff(&a));
+        let v: Vec<f64> = Vec::new();
+        assert_eq!(v, diff(&v));
     }
 
     #[test]
