@@ -550,7 +550,7 @@ where
             let yg =
                 DVector::from_iterator(xs.dof(), (self.f)(ts + coeffs.b[0] * hs, &xs).ode_iter());
 
-            let jac_yg = jac_inv * yg;
+            let jac_yg = &jac_inv * &yg;
 
             // convert back to odetype
             let mut g1 = xs.clone();
@@ -568,10 +568,34 @@ where
             }
 
             for i in 1..coeffs.a.nrows() {
+                let mut dx = next_x.clone();
+                dx.set_zero();
+                let mut df = dx.clone();
                 for j in 0..i - 1 {
-                    // TODO
+                    let gj = &g[j];
+                    for d in 0..dx.dof() {
+                        *dx.get_mut(d) += gj.get(d) * coeffs.a[(i, j)];
+                        *df.get_mut(d) += gj.get(d) * coeffs.c[(i, j)];
+                    }
                 }
+
+                let next_gvec = &jac_inv
+                    * DVector::from_iterator(
+                        xs.dof(),
+                        (self.f)(ts + coeffs.b[i] * hs, &xs.clone().sum(&dx)).ode_iter(),
+                    )
+                    + DVector::from_iterator(xs.dof(), df.ode_iter().map(|x| x * (1. / hs)));
+
+                // convert back
+                let mut next_g = xs.clone();
+                for d in 0..next_g.dof() {
+                    next_g.insert(i, next_gvec[d]);
+                    *next_x.get_mut(d) += next_gvec[d] * coeffs.b[i];
+                }
+                g.push(next_g);
             }
+
+            x.push(next_x);
         }
 
         Ok(OdeSolution { yout: x, tout: h })
