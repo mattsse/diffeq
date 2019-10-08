@@ -217,7 +217,7 @@ where
 
             // check error and find a new step size
             let step = self.stepsize_hw92(
-                dt, init.tdir, &y, &ytrial, yerr, order, timeout, abstol, reltol, maxstep, norm,
+                dt, init.tdir, &y, &ytrial, yerr, order, timeout, abstol, reltol, maxstep,
             );
             timeout = step.timeout_ctn;
 
@@ -733,7 +733,6 @@ where
     }
 
     /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
-    // TODO fix _norm usage
     fn stepsize_hw92(
         &self,
         dt: f64,
@@ -746,7 +745,6 @@ where
         abstol: f64,
         reltol: f64,
         maxstep: f64,
-        _norm: PNorm,
     ) -> StepHW92 {
         let fac = 0.8;
         let _facmax = 5.;
