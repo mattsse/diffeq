@@ -39,7 +39,7 @@ pub trait OdeType: Clone + std::fmt::Debug {
 
     #[inline]
     fn set_zero(&mut self) {
-            self.fill(Self::Item::zero());
+        self.fill(Self::Item::zero());
     }
 
     #[inline]

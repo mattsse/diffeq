@@ -195,7 +195,8 @@ where
         let order = btab.symbol.order().min();
         let mut diagnostics = Diagnostics::default();
         let norm = opts.norm.0;
-        let mut last_step = false;
+
+        let mut last_step = (t + dt - tend).abs() <= std::f64::EPSILON;
 
         let mut tspan: Vec<f64> = Vec::with_capacity(self.tspan.len());
         tspan.push(t);
