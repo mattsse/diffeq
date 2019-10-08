@@ -35,8 +35,6 @@ impl fmt::Display for PNorm {
 pub trait OdeType: Clone + std::fmt::Debug {
     type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item>;
 
-    // TODO rm this fn and Default bound
-
     #[inline]
     fn set_zero(&mut self) {
         self.fill(Self::Item::zero());
@@ -57,6 +55,22 @@ pub trait OdeType: Clone + std::fmt::Debug {
     fn get_mut(&mut self, index: usize) -> &mut Self::Item;
 
     fn insert(&mut self, index: usize, item: Self::Item);
+
+    #[inline]
+    fn sum(mut self, other: &Self) -> Self {
+        for i in 0..self.dof() {
+            *self.get_mut(i) += other.get(i);
+        }
+        self
+    }
+
+    #[inline]
+    fn sum_mut(&mut self, other: &Self) -> &mut Self {
+        for i in 0..self.dof() {
+            *self.get_mut(i) += other.get(i);
+        }
+        self
+    }
 
     #[inline]
     fn ode_iter(&self) -> OdeTypeIterator<Self> {
