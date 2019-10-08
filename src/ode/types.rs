@@ -37,9 +37,15 @@ pub trait OdeType: Clone + std::fmt::Debug {
 
     // TODO rm this fn and Default bound
 
+    #[inline]
     fn set_zero(&mut self) {
+            self.fill(Self::Item::zero());
+    }
+
+    #[inline]
+    fn fill(&mut self, item: Self::Item) {
         for i in 0..self.dof() {
-            self.insert(i, Self::Item::zero());
+            self.insert(i, item.clone());
         }
     }
 
@@ -122,14 +128,17 @@ where
         self.nrows()
     }
 
+    #[inline]
     fn get(&self, index: usize) -> Self::Item {
         self[index]
     }
 
+    #[inline]
     fn get_mut(&mut self, index: usize) -> &mut Self::Item {
         &mut self[index]
     }
 
+    #[inline]
     fn insert(&mut self, index: usize, item: Self::Item) {
         self[index] = item;
     }
