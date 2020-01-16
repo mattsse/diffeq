@@ -18,9 +18,8 @@ alga = "0.9"
 derive_builder = "0.9"
 num-traits = "0.2"
 itertools-num = "0.1"
-snafu = "0.6"
 serde = { version = "1.0", optional = true, features = ["derive"] }
-thiserror = "1.0.9"
+thiserror = "1.0"
 
 [features]
 serde0 = ["serde"]
