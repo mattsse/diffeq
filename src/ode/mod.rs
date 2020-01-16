@@ -6,6 +6,7 @@ pub mod runge_kutta;
 pub mod solution;
 pub mod types;
 
+/// The available ODE solvers.
 #[derive(Debug, Clone)]
 pub enum Ode {
     Ode23,
@@ -18,7 +19,7 @@ pub enum Ode {
 }
 
 impl std::str::FromStr for Ode {
-    type Err = ();
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -29,7 +30,7 @@ impl std::str::FromStr for Ode {
             "ode4ms" => Ok(Ode::Ode4ms),
             "ode4s" => Ok(Ode::Ode4s),
             "ode78" => Ok(Ode::Ode78),
-            _ => Err(()),
+            _ => Err(format!("{} is not a valid Ode identifier", s)),
         }
     }
 }

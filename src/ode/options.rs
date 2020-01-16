@@ -1,4 +1,3 @@
-//#![allow(unused)]
 use crate::ode::types::PNorm;
 use std::collections::HashMap;
 use std::fmt;
@@ -30,13 +29,25 @@ macro_rules! option_val {
 #[derive(Clone, Debug, Default, Builder)]
 #[builder(setter(strip_option, into))]
 pub struct AdaptiveOptions {
+    /// Minimal integration step.
     pub minstep: Option<Minstep>,
+    /// Maximal integration step.
     pub maxstep: Option<Maxstep>,
+    /// Initial integration step.
     pub initstep: Initstep,
+    /// Defaults to [`Points::All`] output is given for each value in tspan
+    /// as well as for each intermediate point the solver used.
     pub points: Points,
+    /// An integration step is accepted if `E <= reltol*abs(y)`
+    /// defaults to `1e-5`
     pub reltol: Reltol,
+    /// An integration step is accepted if `E <= abstol`
+    /// defaults to `1e-8`
     pub abstol: Abstol,
+    /// User-supplied norm for determining the error.
     pub norm: Norm,
+    /// User defined timeout after which step reduction should not
+    /// increase step for timeout controlled steps.
     pub step_timeout: StepTimeout,
 }
 
@@ -225,18 +236,18 @@ macro_rules! __ode__deref {
 }
 
 options! {
-    /// an integration step is accepted if E <= reltol*abs(y)
+    /// An integration step is accepted if `E <= reltol*abs(y)`
     (Reltol, "Reltol") => [f64],
-    /// an integration step is accepted if E <= abstol
+    /// An integration step is accepted if `E <= abstol`
     (Abstol, "Abstol") => [f64],
-    /// minimal integration step
+    /// Minimal integration step.
     (Minstep, "Minstep") => [f64],
-    /// maximal integration step
+    /// Maximal integration step.
     (Maxstep, "Maxstep") => [f64],
-    /// initial integration step
+    /// Initial integration step.
     #[derive(Default)]
     (Initstep, "Initstep") => [f64],
-    /// Sometimes an integration step takes you out of the region where F(t,y) has a valid solution
+    /// Sometimes an integration step takes you out of the region where `F(t,y)` has a valid solution
     /// and F might result in an error.
     /// retries sets a limit to the number of times the solver might try with a smaller step.
     #[derive(Default)]
@@ -244,8 +255,8 @@ options! {
     /// user defined norm for determining the error
     #[derive(Default)]
     (Norm, "Norm") => [PNorm],
-    /// user defined timeout after which step reduction should not
-    /// increase step for timeout controlled steps
+    /// User defined timeout after which step reduction should not
+    /// increase step for timeout controlled steps.
     (StepTimeout, "StepTimeout") => [usize]
 }
 

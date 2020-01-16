@@ -1,59 +1,40 @@
 use crate::ode::runge_kutta::WeightType;
-use snafu::{Backtrace, Snafu};
+use thiserror::Error;
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
-
-#[derive(Debug, Snafu)]
-pub enum Error {
-    #[snafu(display("Element not initialized {}", msg))]
-    Uninitialized { msg: String },
-    #[snafu(display("The user id {} is invalid", user_id))]
-    UserIdInvalid { user_id: i32, backtrace: Backtrace },
-    #[snafu(display("{}", err))]
-    Ode { err: OdeError },
-}
-
-impl Error {
-    pub fn uninitialized<T: Into<String>>(msg: T) -> Self {
-        Error::Uninitialized { msg: msg.into() }
-    }
-
-    pub fn ode<T: Into<OdeError>>(err: T) -> Self {
-        Error::Ode { err: err.into() }
-    }
-}
-
-#[derive(Debug, Snafu)]
+#[derive(Error, Debug)]
 pub enum OdeError {
-    #[snafu(display("Expected {:?} weights, got {:?} weights", expected, got))]
+    #[error("{msg}")]
+    Uninitialized { msg: String },
+    #[error("Expected {expected:?} weights, found {found:?} weights")]
     InvalidButcherTableauWeightType {
         expected: WeightType,
-        got: WeightType,
+        found: WeightType,
     },
-    #[snafu(display(
-        "Encountered NAN after {} computations while solving at timestamp {}",
-        computation,
-        timestamp
-    ))]
+    #[error(
+        "Encountered NAN after {computation} computations while solving at timestamp {timestamp}"
+    )]
     NAN { computation: usize, timestamp: f64 },
-    #[snafu(display("Zero time span"))]
+    #[error("Zero time span is not allowed")]
     ZeroTimeSpan,
-    #[snafu(display("Initial step has wrong sign"))]
+    #[error("Initial step has wrong sign")]
     InvalidInitstep,
-    #[snafu(display("Unable to compute matrix operation"))]
+    #[error("Unable to compute matrix operation")]
     InvalidMatrix,
 }
 
-impl Into<Error> for OdeError {
-    fn into(self) -> Error {
-        Error::Ode { err: self }
+impl OdeError {
+    pub(crate) fn uninitialized<T: ToString>(s: T) -> Self {
+        OdeError::Uninitialized { msg: s.to_string() }
     }
 }
 
 /// Enumeration of the errors that may arise during integration.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum IntegrationError {
-    MaxNumStepReached { x: f64, n_step: u32 },
-    StepSizeUnderflow { x: f64 },
-    StiffnessDetected { x: f64 },
+    #[error("Maximum steps reached at {at}, after {n_step} steps")]
+    MaxNumStepReached { at: f64, n_step: u32 },
+    #[error("Encountered step size underflow at {at}")]
+    StepSizeUnderflow { at: f64 },
+    #[error("Stiffness detected at {at}")]
+    StiffnessDetected { at: f64 },
 }

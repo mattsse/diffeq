@@ -1,4 +1,4 @@
-use crate::error::{Error, OdeError, Result};
+use crate::error::OdeError;
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout};
 use crate::ode::rosenbrock::RosenbrockCoeffs;
@@ -76,16 +76,16 @@ where
 
     /// creates a new OdeProblem
     /// returns an error if any field is None
-    pub fn build(self) -> Result<OdeProblem<F, Y>> {
+    pub fn build(self) -> Result<OdeProblem<F, Y>, OdeError> {
         let f = self
             .f
-            .ok_or_else(|| Error::uninitialized("Required problem must be initialized"))?;
+            .ok_or_else(|| OdeError::uninitialized("Required problem must be initialized"))?;
         let y0 = self
             .y0
-            .ok_or_else(|| Error::uninitialized("Initial starting point must be initialized"))?;
+            .ok_or_else(|| OdeError::uninitialized("Initial starting point must be initialized"))?;
         let tspan = self
             .tspan
-            .ok_or_else(|| Error::uninitialized("Time span must be initialized"))?;
+            .ok_or_else(|| OdeError::uninitialized("Time span must be initialized"))?;
 
         Ok(OdeProblem { f, y0, tspan })
     }
@@ -156,7 +156,7 @@ where
         if !btab.is_adaptive() {
             return Err(OdeError::InvalidButcherTableauWeightType {
                 expected: WeightType::Adaptive,
-                got: WeightType::Explicit,
+                found: WeightType::Explicit,
             });
         }
 
@@ -648,7 +648,7 @@ where
         } else {
             Err(OdeError::InvalidButcherTableauWeightType {
                 expected: WeightType::Adaptive,
-                got: WeightType::Explicit,
+                found: WeightType::Explicit,
             })
         }
     }
@@ -731,7 +731,7 @@ where
         } else {
             Err(OdeError::InvalidButcherTableauWeightType {
                 expected: WeightType::Adaptive,
-                got: WeightType::Explicit,
+                found: WeightType::Explicit,
             })
         }
     }

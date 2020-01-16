@@ -12,16 +12,15 @@ categories = ["science"]
 edition = "2018"
 
 [dependencies]
-nalgebra = "0.18"
+nalgebra = "0.19"
 num = "0.2"
 alga = "0.9"
-derive_builder = "0.7"
+derive_builder = "0.9"
 num-traits = "0.2"
 itertools-num = "0.1"
-snafu = "0.5"
+snafu = "0.6"
 serde = { version = "1.0", optional = true, features = ["derive"] }
+thiserror = "1.0.9"
 
 [features]
-problems = []
-plot = []
 serde0 = ["serde"]
