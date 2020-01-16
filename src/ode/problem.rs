@@ -1,3 +1,5 @@
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::too_many_arguments)]
 use crate::error::OdeError;
 use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
 use crate::ode::options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout};
@@ -571,8 +573,7 @@ where
                 let mut dx = next_x.clone();
                 dx.set_zero();
                 let mut df = dx.clone();
-                for j in 0..i - 1 {
-                    let gj = &g[j];
+                for (j, gj) in g.iter().enumerate().take(i - 1) {
                     for d in 0..dx.dof() {
                         *dx.get_mut(d) += gj.get(d) * coeffs.a[(i, j)];
                         *df.get_mut(d) += gj.get(d) * coeffs.c[(i, j)];
@@ -605,6 +606,7 @@ where
         self.oderosenbrock(RosenbrockCoeffs::kr4())
     }
 
+    /// Solve the problem using the `Ode4s` adaptive solver.
     pub fn ode4s_s(&self) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderosenbrock(RosenbrockCoeffs::s4())
     }
@@ -736,9 +738,7 @@ where
         }
     }
 
-    /// For dense output see Hairer & Wanner p.190 using Hermite
-    ///  interpolation. Updates y in-place.
-    /// f_0 = f(x_0 , y_0) , f_1 = f(x_0 + h, y_1 )
+    /// For dense output see Hairer & Wanner p.190 using Hermite interpolation.
     fn hermite_interp(&self, tquery: f64, t: f64, dt: f64, y0: &Y, y1: &Y, f0: &Y, f1: &Y) -> Y {
         let mut y = y0.clone();
         let theta = (tquery - t) / dt;
@@ -838,9 +838,8 @@ where
         for d in 0..x1.dof() {
             *x1.get_mut(d) += f0.get(d) * h0 * tdir;
         }
-        let f1 = (self.f)(t0 + tdir * h0, &x1);
         // estimate second derivative
-        let mut f1_0 = f1.clone();
+        let mut f1_0 = (self.f)(t0 + tdir * h0, &x1);
         for d in 0..f1_0.dof() {
             *f1_0.get_mut(d) -= f0.get(d);
         }
