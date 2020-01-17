@@ -1,8 +1,33 @@
 use crate::ode::types::PNorm;
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 
-pub type OdeOptionMap = HashMap<&'static str, OdeOption>;
+pub struct OdeOptionMap {
+    inner: HashMap<&'static str, OdeOption>,
+}
+
+impl Deref for OdeOptionMap {
+    type Target = HashMap<&'static str, OdeOption>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for OdeOptionMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Default for OdeOptionMap {
+    fn default() -> Self {
+        Self {
+            inner: HashMap::new(),
+        }
+    }
+}
 
 macro_rules! option_val {
     ($ops:ident rm $id:ident) => {

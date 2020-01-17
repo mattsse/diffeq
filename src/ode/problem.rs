@@ -7,14 +7,15 @@ use crate::ode::rosenbrock::RosenbrockCoeffs;
 use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
 use crate::ode::solution::OdeSolution;
 use crate::ode::types::{OdeType, PNorm};
+use crate::ode::Ode;
 use alga::general::RealField;
 use na::{allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, U1, U2};
 use num_traits::{abs, signum};
 use std::fmt;
 use std::ops::{Add, Mul};
 
-/// F: the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t)
-/// and returns dy/dt::typeof(y/t)
+/// F: the RHS of the ODE `dy/dt = F(t,y)`, which is a function of t and y(t)
+/// and returns `dy/dt`.
 /// y0: initial value for y. The type of y0, promoted as necessary according to the numeric type used
 /// for the times, determines the element type of the yout vector (yout::Vector{typeof(y0*one(t))})
 /// tspan: Any iterable of sorted t values at which the solution (y) is requested.
@@ -27,12 +28,15 @@ where
     F: Fn(f64, &Y) -> Y,
     Y: OdeType,
 {
-    /// the RHS of the ODE dy/dt = F(t,y), which is a function of t and y(t) and returns the derivatives of y
+    /// The RHS of the ODE `dy/dt = F(t,y)`.
+    ///
+    /// Is a function of t and y(t) and returns the derivatives of y
     f: F,
-    /// initial value for `Rhs` input
+    /// Initial value for `Rhs` input.
+    ///
     /// determines the element type of the `yout` vector of the solutions
     y0: Y,
-    /// sorted t values at which the solution (y) is requested
+    /// Sorted t values at which the solution (y) is requested
     tspan: Vec<f64>,
 }
 
@@ -64,20 +68,21 @@ where
         self
     }
 
-    /// set the time span for the problem
+    /// Set the time span for the problem.
     pub fn tspan(mut self, tspan: Vec<f64>) -> Self {
         self.tspan = Some(tspan);
         self
     }
 
-    /// creates a new tspan with `n` items from `from` to `to`
+    /// Creates a new tspan with `n` items from `from` to `to`.
     pub fn tspan_linspace(mut self, from: f64, to: f64, n: usize) -> Self {
         self.tspan = Some(itertools_num::linspace(from, to, n).collect());
         self
     }
 
-    /// creates a new OdeProblem
-    /// returns an error if any field is None
+    /// Creates a new [`OdeProblem`].
+    ///
+    /// Returns an error if a field is None.
     pub fn build(self) -> Result<OdeProblem<F, Y>, OdeError> {
         let f = self
             .f
@@ -119,31 +124,66 @@ where
         OdeBuilder::default()
     }
 
-    pub fn ode21(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn solve(self, ode: Ode, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+        match ode {
+            Ode::Feuler => Ok(self.feuler()),
+            Ode::Heun => Ok(self.heun()),
+            Ode::Midpoint => Ok(self.midpoint()),
+            Ode::Ode23 => self.ode23(opts),
+            Ode::Ode23s => self.ode23s(opts),
+            Ode::Ode4 => Ok(self.ode4()),
+            Ode::Ode45 => self.ode45(opts),
+            Ode::Ode45fe => self.ode45_fe(opts),
+            Ode::Ode4skr => self.ode4s_kr(),
+            Ode::Ode4ss => self.ode4s_s(),
+            Ode::Ode78 => self.ode78(opts),
+        }
+    }
+
+    /// Solve the problem using the Feuler Butchertableau.
+    pub fn feuler(self) -> OdeSolution<f64, Y> {
+        self.oderk_fixed(&ButcherTableau::feuler())
+    }
+
+    /// Solve the problem using the Heun Butchertableau.
+    pub fn heun(self) -> OdeSolution<f64, Y> {
+        self.oderk_fixed(&ButcherTableau::heun())
+    }
+
+    /// Solve the problem using the Mindpoint method.
+    pub fn midpoint(self) -> OdeSolution<f64, Y> {
+        self.oderk_fixed(&ButcherTableau::midpoint())
+    }
+
+    pub fn ode21(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk21(), opts)
     }
 
-    pub fn ode23(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode23(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk23(), opts)
     }
 
-    pub fn ode45(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode4(self) -> OdeSolution<f64, Y> {
+        self.oderk_fixed(&ButcherTableau::rk4())
+    }
+
+    pub fn ode45(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.ode45_dp(opts)
     }
 
-    pub fn ode45_dp(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode45_dp(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::dopri5(), opts)
     }
 
-    pub fn ode45_fe(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode45_fe(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::rk45(), opts)
     }
 
-    pub fn ode78(&self, opts: &OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
+    pub fn ode78(&self, opts: OdeOptionMap) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderk_adapt(&ButcherTableau::feh78(), opts)
     }
 
-    /// solve with adaptive Runge-Kutta methods
+    /// Solve with adaptive Runge-Kutta methods.
     fn oderk_adapt<S: Dim, Ops: Into<AdaptiveOptions>>(
         &self,
         btab: &ButcherTableau<S>,
@@ -311,11 +351,7 @@ where
         })
     }
 
-    /// solve the problem using the Feuler Butchertableau
-    pub fn ode1(self) -> OdeSolution<f64, Y> {
-        self.oderk_fixed(&ButcherTableau::feuler())
-    }
-
+    /// Solve with fixed step Runge-Kutta methods.
     fn oderk_fixed<S: Dim>(self, btab: &ButcherTableau<S>) -> OdeSolution<f64, Y>
     where
         DefaultAllocator: Allocator<f64, U1, S>
@@ -324,7 +360,7 @@ where
             + Allocator<f64, S>,
     {
         // store for the computed values
-        let mut ys: Vec<Y> = Vec::with_capacity(self.tspan.len());
+        let mut ys = Vec::with_capacity(self.tspan.len());
 
         // insert y0 as initial point
         ys.push(self.y0.clone());
@@ -435,8 +471,7 @@ where
                 fdt[i] = fdti * ((h * d) / (h / 100.));
             }
 
-            // modified Rosenbrock formula
-            // inv(W) * (F0 + T)
+            // modified Rosenbrock formula: inv(W) * (F0 + T)
             let w_inv = w.try_inverse().ok_or(OdeError::InvalidMatrix)?;
 
             let k1 = &w_inv * (&f0 + &fdt);
@@ -602,11 +637,12 @@ where
         Ok(OdeSolution { yout: x, tout: h })
     }
 
+    /// Solve the problem using the Kaps-Rentrop coefficients.
     pub fn ode4s_kr(&self) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderosenbrock(RosenbrockCoeffs::kr4())
     }
 
-    /// Solve the problem using the `Ode4s` adaptive solver.
+    /// Solve the problem using the Shampine coefficients.
     pub fn ode4s_s(&self) -> Result<OdeSolution<f64, Y>, OdeError> {
         self.oderosenbrock(RosenbrockCoeffs::s4())
     }
@@ -614,6 +650,8 @@ where
     /// ```latex
     /// e_{n+1}=h\sum _{i=1}^{s}(b_{i}-b_{i}^{*})k_{i}
     /// ```
+    /// Panics if the number of stages of the butcher tableau is not equal
+    /// to the length of the coefficients.
     fn calc_error<S: Dim>(
         &self,
         coeffs: &CoefficientMap<Y>,
@@ -655,8 +693,9 @@ where
         }
     }
 
-    /// calculates all coefficients values for a given value `yn` at a specific time `t`
-    /// creates an `CoefficientMap` with the calculated coefficient `k` and their
+    /// Calculates all coefficients values for a given value `yn` at a specific time `t`.
+    ///
+    /// Creates an `CoefficientMap` with the calculated coefficient `k` and their
     /// approximations `y` of size `S`, the number of stages of the butcher tableau
     pub fn calc_coefficients<S: Dim>(
         &self,
@@ -756,7 +795,7 @@ where
         y
     }
 
-    /// Estimates the error and a new step size following Hairer & Wanner 1992, p167
+    /// Estimates the error and a new step size following Hairer & Wanner 1992, p167.
     fn stepsize_hw92(
         &self,
         dt: f64,
@@ -968,14 +1007,10 @@ mod tests {
     }
 
     #[test]
-    fn ode1_test() {
-        lorenz_problem().ode1();
-    }
-
-    #[test]
     fn diff_test() {
         let a = vec![2., 6., 4., 16.];
         assert_eq!(vec![4.0, -2.0, 12.0], diff(&a));
+
         let v: Vec<f64> = Vec::new();
         assert_eq!(v, diff(&v));
     }
@@ -984,44 +1019,14 @@ mod tests {
     fn ode45_test() {
         let mut ops = OdeOptionMap::default();
         ops.insert(Points::option_name(), Points::Specified.into());
-        let _solution = lorenz_problem().ode45(&OdeOptionMap::default()).unwrap();
+        let _solution = lorenz_problem().ode45(OdeOptionMap::default()).unwrap();
     }
 
     #[test]
     fn fdjacobian_test() {
         let problem = lorenz_problem();
-        // dFdx[-10.0 10.0 0.0; 28.0 -1.0 -0.1; 0.0 0.1 -2.66667]
         let x = Y0.to_vec();
         let jac = problem.fdjacobian(0.0, &x);
         assert_eq!((3, 3), jac.shape());
-    }
-
-    #[test]
-    fn ode23s_test() {
-        let problem = lorenz_problem();
-
-        let s = problem.ode23s(&OdeOptionMap::default()).unwrap();
-
-        let mut tyout = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open("ode23s_tout.txt")
-            .unwrap();
-
-        write!(tyout, "{:?}", s.tout).unwrap();
-
-        let mut fyout = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open("ode23s_yout.txt")
-            .unwrap();
-
-        for y in &s.yout {
-            for i in y {
-                write!(fyout, "{}, ", *i).unwrap();
-            }
-        }
     }
 }

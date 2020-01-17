@@ -29,8 +29,6 @@ impl fmt::Display for PNorm {
     }
 }
 
-// TODO refactor api to support errors and options
-
 // add default to item
 pub trait OdeType: Clone + std::fmt::Debug {
     type Item: RealField + Add<f64, Output = Self::Item> + Mul<f64, Output = Self::Item>;
@@ -80,9 +78,16 @@ pub trait OdeType: Clone + std::fmt::Debug {
         }
     }
 
-    // TODO look up norm (4.11) of http://www.hds.bme.hu/~fhegedus/00%20-%20Numerics/B1993%20Solving%20Ordinary%20Differential%20Equations%20I%20-%20Nonstiff%20Problems.pdf
-    // page 169 a)
-    /// compute the p-norm of the OdeIterable
+    /// Compute the p-norm of the OdeIterable.
+    ///
+    /// The p-norm is defined as:
+    ///
+    /// ```latex
+    ///   ∥A∥p=(∑i=1n|ai|p)1/p
+    /// ```
+    /// norm(A, Inf) returns the largest value in abs.(A),
+    /// whereas norm(A, -Inf) returns the smallest.
+    /// If A is a matrix and p=2, then this is equivalent to the Frobenius norm.
     fn pnorm(&self, p: PNorm) -> Self::Item {
         match p {
             PNorm::InfPos => self.ode_iter().fold(Self::Item::zero(), |norm, item| {
