@@ -1,0 +1,39 @@
+{
+  "name": "diffeq-example-wasm",
+  "version": "0.1.0",
+  "description": "Solve differential equations with ODE solvers with rust +  wasm.",
+  "main": "index.js",
+  "bin": {
+    "create-wasm-app": ".bin/create-wasm-app.js"
+  },
+  "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "start": "webpack-dev-server"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rustwasm/create-wasm-app.git"
+  },
+  "keywords": [
+    "webassembly",
+    "wasm",
+    "rust",
+    "webpack"
+  ],
+  "author": "Matthias Seitz <matthias.seitz@tum.de",
+  "license": "(MIT OR Apache-2.0)",
+  "bugs": {
+    "url": "https://github.com/mattsse/diffeq/issues"
+  },
+  "homepage": "https://github.com/mattsse/diffeqreadme",
+  "dependencies": {
+    "diffeq-example-wasm": "file:../pkg"
+  },
+  "devDependencies": {
+    "hello-wasm-pack": "^0.1.0",
+    "webpack": "^4.29.3",
+    "webpack-cli": "^3.1.0",
+    "webpack-dev-server": "^3.1.5",
+    "copy-webpack-plugin": "^5.0.0"
+  }
+}

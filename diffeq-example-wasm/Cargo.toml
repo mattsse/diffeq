@@ -1,0 +1,22 @@
+[package]
+name = "diffeq-example-wasm"
+version = "0.1.0"
+authors = ["Matthias Seitz <matthias.seitz@tum.de>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+diffeq = { version = "0.1.0", path = "../", features = ["serde0"] }
+console_error_panic_hook = { version = "0.1", optional = true }
+
+wee_alloc = { version = "0.4", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

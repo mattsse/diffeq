@@ -23,3 +23,7 @@ thiserror = "1.0"
 
 [features]
 serde0 = ["serde"]
+
+
+[workspace]
+members = ["diffeq-example-wasm"]
