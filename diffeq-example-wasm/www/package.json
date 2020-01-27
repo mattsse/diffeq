@@ -25,7 +25,7 @@
   "bugs": {
     "url": "https://github.com/mattsse/diffeq/issues"
   },
-  "homepage": "https://github.com/mattsse/diffeqreadme",
+  "homepage": "https://github.com/mattsse/diffeq/readme",
   "dependencies": {
     "diffeq-example-wasm": "file:../pkg"
   },
