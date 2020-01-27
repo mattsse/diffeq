@@ -1,4 +1,3 @@
-mod utils;
 
 use diffeq::ode::problem::OdeProblem;
 use diffeq::ode::solution::SolutionPoint;
@@ -12,30 +11,6 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, diffeq-example-wasm!");
-}
-
-//#[wasm_bindgen]
-//#[derive(Clone)]
-//pub struct Point3D {
-//    x : f64,
-//    y : f64,
-//    z : f64,
-//}
-//
-//#[wasm_bindgen]
-//pub struct SolutionPoint {
-//    time: f64,
-//    y: Point3D
-//}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
