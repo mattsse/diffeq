@@ -4,6 +4,15 @@ diffeq
 [![Crates.io](https://img.shields.io/crates/v/diffeq.svg)](https://crates.io/crates/diffeq)
 [![Documentation](https://docs.rs/diffeq/badge.svg)](https://docs.rs/diffeq)
 
+Various basic Ordinary Differential Equation solvers implemented in rust.
+Wasm example: [https://mattsse.github.io/diffeq/](https://mattsse.github.io/diffeq/).
+
+Inpired by the [ODE.jl](https://github.com/JuliaDiffEq/ODE.jl) julia project.
+
+## Documentation
+
+Full Documentation [https://docs.rs/diffeq](https://docs.rs/diffeq)
+
 ## License
 
 Licensed under either of these:
