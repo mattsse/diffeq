@@ -48,10 +48,11 @@ matrix:
     install:
       - *INSTALL_NODE_VIA_NVM
     script:
+      - rm -rf ./docs/*
       - cd diffeq-example-wasm && wasm-pack build
       - cd www && npm install
-      - rustc ./docs/_installer/build-installer.rs
-      - ./build-installer
+      - npm run build
+      - mv ./dist/* ../../docs
     deploy:
       provider: pages
       skip-cleanup: true
