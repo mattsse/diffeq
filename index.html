@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="Matthias Seitz <matthias.seitz@tum.de>">
+
+    <title>diffeq wasm example</title>
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+</head>
+
+<body>
+<noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
+<script src="./bootstrap.js"></script>
+<!-- Navigation -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark static-top">
+    <div class="container">
+        <a class="navbar-brand" href="#">diffeq | Lorenz Attractor wasm</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive"
+                aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+            <ul class="navbar-nav ml-auto">
+
+                <li class="nav-item icon-github">
+                    <a class="nav-link" href="https://github.com/mattsse/diffeq">Github</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://crates.io/crates/diffeq">Docs</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Page Content -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <h2 class="mt-5 text-left">Lorenz Attractor</h2>
+            <p class="text-left">This page demonstrates the <a src="https://en.wikipedia.org/wiki/Lorenz_system">Lorenz
+                Attractor</a> in rust and wasm. The Lorenz Attractor is probably the most illustrative example of a
+                system that exhibits chaotic behavior. Slightly changing the initial conditions of the system leads to
+                completely different solutions. The system itself corresponds to the movement of a point particle in a
+                3D space over time.</p>
+            <figure class="figure">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Lorenz_attractor.svg/480px-Lorenz_attractor.svg.png"
+                     class="figure-img img-fluid rounded" alt="A solution in the Lorenz attractor rendered as an SVG.">
+                <figcaption class="figure-caption">A solution in the Lorenz attractor rendered as an SVG, courtesy of <a
+                        src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Lorenz_attractor.svg"> WikiMedia</a>
+                </figcaption>
+            </figure>
+            <p class="text-left">The model is a system of three different ordinary differential equations now known as
+                the Lorenz equations, which represent the movement of a point (<var>x</var>, <var>y</var>, <var>z</var>)
+                in space over time. <var>t</var> represents time, <var>σ</var>, <var>ρ</var>, <var>ß</var> are
+                constants.</p>
+            <img src="https://wikimedia.org/api/rest_v1/media/math/render/svg/7928004d58943529a7be774575a62ca436a82a7f"
+                 alt="Lorenz Equations"/>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <h2 class="mt-5 text-left">Example</h2>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <p class="text-left">First we need to define the system of differential equations:</p>
+            <pre><code class="rust">fn lorenz_attractor(_t: f64, v: &amp;Vec&lt;f64&gt;) -> Vec&lt;f64&gt; {
+    // extract coordinates from the vec
+    let (x, y, z) = (v[0], v[1], v[2]);
+
+    // Lorenz equations
+    let dx_dt = SIGMA * (y - x);
+    let dy_dt = x * (RHO - z) - y;
+    let dz_dt = x * y - BET * z;
+
+    // derivatives as vec
+    vec![dx_dt, dy_dt, dz_dt]
+}</code></pre>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <h3 class="text-left">Constants</h3>
+            <p class="text-left">Let's define the initial conditions of the system <var>r₀</var> = (<var>x₀</var>, <var>y₀</var>,
+                <var>z₀</var>), the
+                constants <var>σ</var>, <var>ρ</var> and <var>ß</var> and also a time series. One normally assumes that
+                the parameters , <var>σ</var>, <var>ρ</var> and <var>ß</var> are positive. Lorenz used the values
+                <var>σ</var>=10, <var>ß</var> =8/3 and <var>ρ</var>=28.</p>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="sigma-addon3">σ</span>
+                </div>
+                <input type="text" class="form-control" id="sigma" aria-describedby="sigma-addon3" value="10">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="beta-addon3">ß</span>
+                </div>
+                <input type="text" class="form-control" id="beta" aria-describedby="beta-addon3" value="2.66666667">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="rho-addon3">ρ</span>
+                </div>
+                <input type="text" class="form-control" id="rho" aria-describedby="rho-addon3" value="28">
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <p class="text-left">Time series</p>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="start-time-addon3">from</span>
+                </div>
+                <input type="text" class="form-control" id="start-time" aria-describedby="start-time-addon3" value="0">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="end-time-addon3">to</span>
+                </div>
+                <input type="text" class="form-control" id="end-time" aria-describedby="end-time-addon3" value="100">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="steps-addon3">steps</span>
+                </div>
+                <input type="text" class="form-control" id="steps" aria-describedby="steps-addon3" value="10000">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <p class="text-left">Initial position in space</p>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="posx-addon3">x</span>
+                </div>
+                <input type="text" class="form-control" id="posx" aria-describedby="posx-addon3" value="0.1">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="posy-addon3">y</span>
+                </div>
+                <input type="text" class="form-control" id="posy" aria-describedby="posy-addon3" value="0.0">
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="posz-addon3">z</span>
+                </div>
+                <input type="text" class="form-control" id="posz" aria-describedby="posz-addon3" value="0.0">
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="solver-addon3">Choose solver...</span>
+                </div>
+                <select class="custom-select" id="solver-select">
+                    <option selected>Ode45</option>
+                    <option value="feuler">Feuler</option>
+                    <option value="heun">Heun</option>
+                    <option value="midpoint">Midpoint</option>
+                    <option value="ode4">Ode4</option>
+                    <option value="ode4skr">Ode4skr</option>
+                    <option value="ode4s">Ode4s</option>
+                </select>
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" id="btnsolve">Solve</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <div id='plotlydiv'><!-- Plotly chart will be drawn inside this DIV --></div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm">
+            <div id='x-y-cut'></div>
+        </div>
+        <div class="col-sm">
+            <div id='x-z-cut'></div>
+        </div>
+        <div class="col-sm">
+            <div id='y-z-cut'></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Footer -->
+
+<footer class="footer bg-dark" style="height: 30px; line-height: 30px;  width: 100%; margin-top: 60px;">
+    <div class="container">
+        <span class="text-muted">Copyright © 2019-2020 Matthias Seitz</span>
+    </div>
+</footer>
+<!-- Footer -->
+
+<!-- Bootstrap core JavaScript -->
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
+        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
+        crossorigin="anonymous"></script>
+
+<link rel="stylesheet"
+      href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/default.min.css">
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+
+</body>
+
+</html>
