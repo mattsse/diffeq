@@ -42,6 +42,7 @@ matrix:
     install:
       - *INSTALL_NODE_VIA_NVM
     script:
+      - mkdir -p docs
       - rm -rf ./docs/*
       - cd diffeq-example-wasm && wasm-pack build
       - cd www && npm install
