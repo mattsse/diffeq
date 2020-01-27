@@ -310,6 +310,7 @@ impl ButcherTableau<U2> {
 }
 
 impl ButcherTableau<U4> {
+    /// Bogacki–Shampine coefficients
     /// ```text
     ///  0.000 | 0.000 0.000 0.000 0.000
     ///  0.500 | 0.500 0.000 0.000 0.000

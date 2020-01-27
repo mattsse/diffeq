@@ -569,11 +569,10 @@ where
         x.push(self.y0.clone());
 
         let identity = DMatrix::<T>::identity(self.y0.dof(), self.y0.dof());
-
-        for (solstep, ts) in self.tspan.iter().enumerate() {
-            let hs = h[solstep];
+        for (solstep, hs) in h.iter().enumerate() {
+            let ts = self.tspan[solstep];
             let xs = x[solstep].clone();
-            let dfdx = self.fdjacobian(*ts, &xs);
+            let dfdx = self.fdjacobian(ts, &xs);
 
             let (m, n) = dfdx.shape();
             let v = DMatrix::from_diagonal_element(m, n, T::one() * (1. / (coeffs.gamma * hs)));
@@ -594,7 +593,6 @@ where
             for i in 0..g1.dof() {
                 g1.insert(i, jac_yg[i]);
             }
-
             g.push(g1);
 
             let mut next_x = x[x.len() - 1].clone();
@@ -603,7 +601,6 @@ where
             for i in 0..next_x.dof() {
                 *next_x.get_mut(i) += (g1.get(i) * coeffs.b[0]);
             }
-
             for i in 1..coeffs.a.nrows() {
                 let mut dx = next_x.clone();
                 dx.set_zero();
@@ -614,7 +611,6 @@ where
                         *df.get_mut(d) += gj.get(d) * coeffs.c[(i, j)];
                     }
                 }
-
                 let next_gvec = &jac_inv
                     * DVector::from_iterator(
                         xs.dof(),
@@ -625,7 +621,7 @@ where
                 // convert back
                 let mut next_g = xs.clone();
                 for d in 0..next_g.dof() {
-                    next_g.insert(i, next_gvec[d]);
+                    next_g.insert(d, next_gvec[d]);
                     *next_x.get_mut(d) += next_gvec[d] * coeffs.b[i];
                 }
                 g.push(next_g);
@@ -986,6 +982,7 @@ mod tests {
     const BET: f64 = 8.0 / 3.0;
 
     fn lorenz_attractor(_t: f64, v: &Vec<f64>) -> Vec<f64> {
+        // extract coordinates from the vec
         let (x, y, z) = (v[0], v[1], v[2]);
 
         // Lorenz equations
@@ -1019,7 +1016,7 @@ mod tests {
     fn ode45_test() {
         let mut ops = OdeOptionMap::default();
         ops.insert(Points::option_name(), Points::Specified.into());
-        let _solution = lorenz_problem().ode45(OdeOptionMap::default()).unwrap();
+        let _solution = lorenz_problem().ode45(Default::default()).unwrap();
     }
 
     #[test]
