@@ -10,6 +10,9 @@ repository = "https://github.com/mattsse/diffeq-rs"
 keywords = ["math", "algebra", "differential", "equations"]
 categories = ["science"]
 edition = "2018"
+exclude = [
+    "diffeq-example-wasm"
+]
 
 [dependencies]
 nalgebra = "0.19"
