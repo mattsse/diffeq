@@ -41,7 +41,7 @@ pub trait OdeType: Clone + std::fmt::Debug {
     #[inline]
     fn fill(&mut self, item: Self::Item) {
         for i in 0..self.dof() {
-            self.insert(i, item.clone());
+            self.insert(i, item);
         }
     }
 

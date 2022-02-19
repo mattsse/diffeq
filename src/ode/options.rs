@@ -1,8 +1,11 @@
 use crate::ode::types::PNorm;
-use std::collections::HashMap;
-use std::fmt;
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
+#[derive(Default)]
 pub struct OdeOptionMap {
     inner: HashMap<&'static str, OdeOption>,
 }
@@ -18,14 +21,6 @@ impl Deref for OdeOptionMap {
 impl DerefMut for OdeOptionMap {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
-    }
-}
-
-impl Default for OdeOptionMap {
-    fn default() -> Self {
-        Self {
-            inner: HashMap::new(),
-        }
     }
 }
 
@@ -141,9 +136,9 @@ impl Default for Points {
     }
 }
 
-impl Into<OdeOption> for Points {
-    fn into(self) -> OdeOption {
-        OdeOption::Points(self)
+impl From<Points> for OdeOption {
+    fn from(p: Points) -> Self {
+        OdeOption::Points(p)
     }
 }
 
@@ -206,10 +201,10 @@ macro_rules! option {
             }
         }
 
-        impl Into<OdeOption> for $id {
+        impl From<$id> for OdeOption {
 
-            fn into(self) -> OdeOption {
-                OdeOption::$id(self)
+            fn from(id: $id) -> Self {
+                OdeOption::$id(id)
             }
         }
 

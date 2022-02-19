@@ -1,5 +1,4 @@
-use na::allocator::Allocator;
-use na::*;
+use na::{allocator::Allocator, *};
 use num_traits::identities::{One, Zero};
 use std::fmt;
 
@@ -165,10 +164,7 @@ where
 
     #[inline]
     pub fn is_explicit(&self) -> bool {
-        match &self.b {
-            Weights::Explicit(_) => true,
-            _ => false,
-        }
+        matches!(&self.b, Weights::Explicit(_))
     }
 
     #[inline]

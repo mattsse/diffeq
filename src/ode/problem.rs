@@ -1,18 +1,24 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-use crate::error::OdeError;
-use crate::ode::coeff::{CoefficientMap, CoefficientPoint};
-use crate::ode::options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout};
-use crate::ode::rosenbrock::RosenbrockCoeffs;
-use crate::ode::runge_kutta::{ButcherTableau, WeightType, Weights};
-use crate::ode::solution::OdeSolution;
-use crate::ode::types::{OdeType, PNorm};
-use crate::ode::Ode;
+use crate::{
+    error::OdeError,
+    ode::{
+        coeff::{CoefficientMap, CoefficientPoint},
+        options::{AdaptiveOptions, OdeOptionMap, Points, StepTimeout},
+        rosenbrock::RosenbrockCoeffs,
+        runge_kutta::{ButcherTableau, WeightType, Weights},
+        solution::OdeSolution,
+        types::{OdeType, PNorm},
+        Ode,
+    },
+};
 use alga::general::RealField;
 use na::{allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, U1, U2};
 use num_traits::{abs, signum};
-use std::fmt;
-use std::ops::{Add, Mul};
+use std::{
+    fmt,
+    ops::{Add, Mul},
+};
 
 /// F: the RHS of the ODE `dy/dt = F(t,y)`, which is a function of t and y(t)
 /// and returns `dy/dt`.
@@ -967,8 +973,7 @@ impl fmt::Display for Diagnostics {
 mod tests {
     use super::*;
     use crate::ode::options::OdeOp;
-    use std::fs::OpenOptions;
-    use std::io::Write;
+    use std::{fs::OpenOptions, io::Write};
 
     const DT: f64 = 0.001;
     const TF: f64 = 100.0;
@@ -994,6 +999,7 @@ mod tests {
         vec![dx_dt, dy_dt, dz_dt]
     }
 
+    #[allow(clippy::ptr_arg)]
     fn lorenz_problem() -> OdeProblem<impl Fn(f64, &Vec<f64>) -> Vec<f64>, Vec<f64>> {
         OdeProblem::builder()
             .tspan_linspace(0., TF, 100_001)

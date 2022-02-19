@@ -1,6 +1,4 @@
-use diffeq::ode::problem::OdeProblem;
-use diffeq::ode::solution::SolutionPoint;
-use diffeq::ode::Ode;
+use diffeq::ode::{problem::OdeProblem, solution::SolutionPoint, Ode};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;

@@ -1,5 +1,4 @@
-use na::allocator::Allocator;
-use na::*;
+use na::{allocator::Allocator, *};
 
 #[derive(Clone, Debug)]
 pub struct RosenbrockCoeffs<S: Dim>
