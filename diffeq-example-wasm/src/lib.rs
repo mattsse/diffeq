@@ -1,4 +1,3 @@
-
 use diffeq::ode::problem::OdeProblem;
 use diffeq::ode::solution::SolutionPoint;
 use diffeq::ode::Ode;
